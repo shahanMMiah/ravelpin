@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
+	"golang.org/x/net/html"
 )
 
 func main() {
@@ -32,14 +32,28 @@ func main() {
 		os.Exit(1)
 	}
 
-	data, err := goquery.NewDocumentFromReader(res.Body)
+	defer res.Body.Close()
+
+	data, err := html.Parse(res.Body)
 	if err != nil {
 		log.Print("client: error making http request", err)
 		os.Exit(1)
 	}
 
-	test := data.Find("img")
+	traverseHTML(data)
 
-	log.Print(test)
+}
 
+func traverseHTML(node *html.Node) error {
+
+	if node.Type == html.ElementNode && node.Data == "img" {
+		fmt.Printf("data type: %v - attrs %v\n", node.Data, node.Attr)
+
+	}
+
+	for c := node.FirstChild; c != nil; c = c.NextSibling {
+		traverseHTML(c)
+	}
+
+	return nil
 }
