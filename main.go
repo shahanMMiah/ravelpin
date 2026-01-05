@@ -9,10 +9,18 @@ import (
 	"os"
 	"time"
 
+	"github.com/joho/godotenv"
+	"github.com/shahanmmiah/ravelpin/internal/recoginition"
 	"golang.org/x/net/html"
 )
 
-func pintrestTest() {
+type RavelryPattern struct {
+	Id        int    `json:"id"`
+	Name      string `json:"name"`
+	Permalink string `json:"permalink"`
+}
+
+func pintrestTest() string {
 	url := "https://uk.pinterest.com/pin"
 	pinId := 262475484528346906
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/%v/", url, pinId), nil)
@@ -43,8 +51,13 @@ func pintrestTest() {
 
 	//fmt.Printf("%v data type: %v - attrs %v\n", data.FirstChild.Type, data.Data, data.Attr)
 
-	traverseHTML(res.Body, data, "link", 0.0)
+	link, err := traverseHTML(res.Body, data, "link", 0.0)
 
+	if err == nil {
+		return link
+	}
+
+	return ""
 	/*
 	* get the images
 	* check the name of post
@@ -54,11 +67,13 @@ func pintrestTest() {
 	* use image comparison to help get a selection of ravelry posts
 
 	 */
+
 }
 
-func RavelryTest() {
-	const APIUS = "read-da2035a6977ad37ae3438a84cd9c7a70"
-	const APIKEY = "uOkEf1NzqTJ7EsSu4cLQjImGwKXOLNmZL4JvhtR4"
+func RavelryTest(query string) []string {
+	godotenv.Load()
+	APIUS := os.Getenv("RAVELRYAPIUS")
+	APIKEY := os.Getenv("RAVELRYAPIKEY")
 
 	url := "https://api.ravelry.com/patterns/search.json"
 
@@ -68,8 +83,8 @@ func RavelryTest() {
 		os.Exit(1)
 	}
 	params := req.URL.Query()
-	params.Add("query", "hat")
-	params.Add("weight", "cobweb")
+	params.Add("query", query)
+	//params.Add("weight", "cobweb")
 
 	req.URL.RawQuery = params.Encode()
 
@@ -92,6 +107,8 @@ func RavelryTest() {
 
 	jsonData := make(map[string]interface{}, 0)
 
+	fmt.Println(string(data))
+
 	err = json.Unmarshal(data, &jsonData)
 	if err != nil {
 		log.Print("client: error unmarshalling json", err)
@@ -102,24 +119,55 @@ func RavelryTest() {
 
 	for _, items := range patterMap {
 
-		if sItem, found := items.(map[string]any); found {
-			if image, found := sItem["first_photo"].(map[string]any); found {
-				fmt.Printf("query is %v, %v\n", req.URL.String(), image["medium2_url"])
-			}
+		pattern := RavelryPattern{}
+
+		patternData, err := json.Marshal(items)
+		if err != nil {
+			log.Print("client: error re marshalling json", err)
+			os.Exit(1)
 		}
+
+		json.Unmarshal(patternData, &pattern)
+
+		fmt.Println(pattern)
+
+		/*if sItem, found := items.(map[string]any); found {
+			fmt.Println(sItem)
+
+			if image, found := sItem["first_photo"].(map[string]any); found {
+				fmt.Printf("item is  is %v, %v\n", image,image["medium2_url"])
+			}
+
+		}
+		*/
 	}
 
+	return []string{}
 	//fmt.Printf("code: %v - data: %v\n", res.StatusCode, jsonData["patterns"])
 
 }
 
 func main() {
 
-	RavelryTest()
+	link := pintrestTest()
+
+	if link != "" {
+		fmt.Println(link)
+		classified := recoginition.ClasifyImageTest(link)
+		fmt.Println("best guesses are:")
+		for _, cls := range classified {
+			fmt.Printf("%v\n", cls.Label)
+			RavelryTest(cls.Label)
+
+		}
+
+	}
+
+	//recoginition.TestPrint()
 
 }
 
-func traverseHTML(body io.Reader, node *html.Node, datatype string, level float64) error {
+func traverseHTML(body io.Reader, node *html.Node, datatype string, level float64) (string, error) {
 
 	//fmt.Printf("level %f node %v --------- data %v ns %v\n", level, node.Data, node.Attr, node.Namespace)
 
@@ -137,13 +185,31 @@ func traverseHTML(body io.Reader, node *html.Node, datatype string, level float6
 
 	if node.Type == html.ElementNode && node.Data == datatype {
 
-		fmt.Printf("level %f data type: %v - attrss %v\n", level, node.Data, node.Attr)
+		//fmt.Printf("level %f data type: %v - attrss %v\n", level, node.Data, node.Attr)
+
+		imgNode := make(map[string]string, 0)
+
+		for _, attr := range node.Attr {
+			imgNode[attr.Key] = attr.Val
+		}
+
+		link, linkFound := imgNode["href"]
+		_, idFound := imgNode["id"]
+		as, asFound := imgNode["as"]
+
+		if linkFound && idFound && asFound && as == "image" {
+			return string(link), nil
+		}
 
 	}
 
 	for c := node.FirstChild; c != nil; c = c.NextSibling {
-		traverseHTML(body, c, datatype, level+1.0)
+		child, err := traverseHTML(body, c, datatype, level+1.0)
+
+		if err == nil {
+			return child, nil
+		}
 	}
 
-	return nil
+	return "", fmt.Errorf("no image link found")
 }

@@ -1,1 +1,3 @@
 ./ravelpin
+cert-ca.crt
+.env
