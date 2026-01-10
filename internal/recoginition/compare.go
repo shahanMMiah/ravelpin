@@ -1,35 +1,70 @@
 package recoginition
 
 import (
-	"image"
-	"io"
-
 	"github.com/rivo/duplo"
 )
 
-func CompareImages(srcpath, trgpath io.Reader) (duplo.Match, error) {
+func CompareImage(srcpath, trgpath string) (duplo.Match, error) {
 
-	store := duplo.New()
-
-	srcImg, _, err := image.Decode(srcpath)
-
+	store := CreateStore()
+	trgHash, err := CreateHash(trgpath)
 	if err != nil {
 		return duplo.Match{}, err
 
 	}
-	trgImg, _, err := image.Decode(trgpath)
-
-	if err != nil {
-		return duplo.Match{}, err
-
-	}
-
-	srcHash, _ := duplo.CreateHash(srcImg)
-	trgHash, _ := duplo.CreateHash(trgImg)
-
-	store.Add("sourceImg", srcHash)
+	AddToStore(store, "src", srcpath)
 	matches := store.Query(trgHash)
 
 	return *matches[0], nil
+
+}
+
+func CompareItems(srcItems []any, srcImgPath, trgpath string) (duplo.Matches, error) {
+
+	store := CreateStore()
+
+	trgHash, err := CreateHash(trgpath)
+	if err != nil {
+		return duplo.Matches{}, err
+
+	}
+	for _, src := range srcItems {
+		AddToStore(store, src, srcImgPath)
+
+	}
+
+	matches := store.Query(trgHash)
+
+	return matches, nil
+
+}
+
+func CreateStore() *duplo.Store {
+	return duplo.New()
+}
+
+func CreateHash(imgPath string) (duplo.Hash, error) {
+	img, err := GetImage(imgPath)
+
+	if err != nil {
+		return duplo.Hash{}, err
+
+	}
+
+	imgHash, _ := duplo.CreateHash(img)
+	return imgHash, nil
+
+}
+func AddToStore(store *duplo.Store, hshName any, imgpath string) error {
+
+	hsh, err := CreateHash(imgpath)
+
+	if err != nil {
+		return err
+	}
+
+	store.Add(hshName, hsh)
+
+	return nil
 
 }

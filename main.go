@@ -7,6 +7,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -14,15 +17,20 @@ import (
 	"golang.org/x/net/html"
 )
 
+type RavelPhoto struct {
+	MediumURL string `json:"medium_url"`
+}
+
 type RavelryPattern struct {
-	Id        int    `json:"id"`
-	Name      string `json:"name"`
-	Permalink string `json:"permalink"`
+	Id         int        `json:"id"`
+	Name       string     `json:"name"`
+	Permalink  string     `json:"permalink"`
+	FirstPhoto RavelPhoto `json:"first_photo"`
 }
 
 func pintrestTest() string {
 	url := "https://uk.pinterest.com/pin"
-	pinId := 262475484528346906
+	pinId := 815573814800236964
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/%v/", url, pinId), nil)
 	if err != nil {
 		log.Print("client: could not create request", err)
@@ -70,7 +78,7 @@ func pintrestTest() string {
 
 }
 
-func RavelryTest(query string) []string {
+func RavelryTest(query string) []RavelryPattern {
 	godotenv.Load()
 	APIUS := os.Getenv("RAVELRYAPIUS")
 	APIKEY := os.Getenv("RAVELRYAPIKEY")
@@ -84,6 +92,7 @@ func RavelryTest(query string) []string {
 	}
 	params := req.URL.Query()
 	params.Add("query", query)
+	params.Add("page_size", "10")
 	//params.Add("weight", "cobweb")
 
 	req.URL.RawQuery = params.Encode()
@@ -107,7 +116,7 @@ func RavelryTest(query string) []string {
 
 	jsonData := make(map[string]interface{}, 0)
 
-	fmt.Println(string(data))
+	//fmt.Println(string(data))
 
 	err = json.Unmarshal(data, &jsonData)
 	if err != nil {
@@ -116,7 +125,7 @@ func RavelryTest(query string) []string {
 	}
 
 	patterMap, _ := jsonData["patterns"].([]any)
-
+	patterns := make([]RavelryPattern, 0)
 	for _, items := range patterMap {
 
 		pattern := RavelryPattern{}
@@ -129,7 +138,7 @@ func RavelryTest(query string) []string {
 
 		json.Unmarshal(patternData, &pattern)
 
-		fmt.Println(pattern)
+		patterns = append(patterns, pattern)
 
 		/*if sItem, found := items.(map[string]any); found {
 			fmt.Println(sItem)
@@ -142,28 +151,33 @@ func RavelryTest(query string) []string {
 		*/
 	}
 
-	return []string{}
+	return patterns
 	//fmt.Printf("code: %v - data: %v\n", res.StatusCode, jsonData["patterns"])
 
 }
 
-func main() {
+func CompareRavelImages(patterns []RavelryPattern, trgpath string) (RavelryPattern, error) {
 
-	link := pintrestTest()
+	store := recoginition.CreateStore()
 
-	if link != "" {
-		fmt.Println(link)
-		classified := recoginition.ClasifyImageTest(link)
-		fmt.Println("best guesses are:")
-		for _, cls := range classified {
-			fmt.Printf("%v\n", cls.Label)
-			RavelryTest(cls.Label)
+	trgHash, err := recoginition.CreateHash(trgpath)
+	if err != nil {
+		return RavelryPattern{}, err
 
-		}
+	}
+	for _, pattern := range patterns {
+		recoginition.AddToStore(store, pattern, pattern.FirstPhoto.MediumURL)
 
 	}
 
-	//recoginition.TestPrint()
+	testPhoto := RavelPhoto{MediumURL: "https://images4-f-cdn.ravelrycache.com/uploads/RenardeEndormie/928625511/IMG-1677_medium.jpg"}
+	test := RavelryPattern{Id: 1234, Name: "sunflowerSock", Permalink: "sunflower-fields-socks", FirstPhoto: testPhoto}
+	recoginition.AddToStore(store, test, test.FirstPhoto.MediumURL)
+
+	matches := store.Query(trgHash)
+	sort.Sort(matches)
+	pattern, _ := matches[0].ID.(RavelryPattern)
+	return pattern, nil
 
 }
 
@@ -212,4 +226,38 @@ func traverseHTML(body io.Reader, node *html.Node, datatype string, level float6
 	}
 
 	return "", fmt.Errorf("no image link found")
+}
+
+func main() {
+
+	link := pintrestTest()
+	//testlink := "https://i.pinimg.com/736x/06/78/c1/0678c12bb5acb9d93854013af00613a0.jpg"
+	if link != "" {
+		fmt.Println(link)
+
+		testRavelSearchTerms := map[string]any{
+			"garment": []string{"sweater", "pancho", "cardigan", "trousers", "jean", "sock"},
+		}
+		classified := recoginition.ClasifyImageTest(link)
+
+		fmt.Printf("found %v\n", classified)
+		fmt.Println("best guesses are:")
+
+		for _, cls := range classified {
+
+			garmList, _ := testRavelSearchTerms["garment"].([]string)
+
+			if slices.Contains(garmList, strings.ToLower(cls.Label)) {
+				fmt.Printf("%v\n", cls.Label)
+				ravPatterns := RavelryTest(cls.Label)
+
+				bestMatchPattern, _ := CompareRavelImages(ravPatterns, link)
+				fmt.Println(bestMatchPattern)
+			}
+		}
+
+	}
+
+	//recoginition.TestPrint()
+
 }

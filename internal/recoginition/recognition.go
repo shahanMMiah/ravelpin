@@ -31,24 +31,32 @@ type classification struct {
 
 type Labels []string
 
+func GetImage(imagelink string) (image.Image, error) {
+	response, err := http.Get(imagelink)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+
+	img, err := imaging.Decode(response.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return img, nil
+
+}
+
 func ClasifyImageTest(imagelink string) []classification {
 	os.Setenv("TF_CPP_MIN_LOG_LEVEL", "2")
 
 	wd, _ := os.Getwd()
 
 	model := tfgo.LoadModel(fmt.Sprintf("%s/model", wd), []string{"serve"}, nil)
-
-	response, err := http.Get(imagelink)
+	srcImage, err := GetImage(imagelink)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer response.Body.Close()
-
-	srcImage, err := imaging.Decode(response.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	scaledImg := imaging.Fill(srcImage, imgWH, imgWH, imaging.Center, imaging.Lanczos)
 
 	imgTensor, _ := newImgTensor(imgWH, imgWH, scaledImg)
