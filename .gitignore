@@ -1,3 +1,5 @@
 ./ravelpin
 cert-ca.crt
 .env
+tfpython
+model

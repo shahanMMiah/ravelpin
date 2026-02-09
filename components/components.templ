@@ -1,0 +1,18 @@
+package components
+
+
+
+
+templ SearchBar() {
+    <form id="form" action="/link" method="post" hx-boost="true">
+      <label for="pin url"></label>
+      <input type="url" id="pinlink" name="pinlink" class="form-control" placeholder="Pintrest URL: "/>
+</form>
+}
+
+templ HomePage(){
+    <h1> Ravelpin </h1>
+     @SearchBar()
+
+}
+

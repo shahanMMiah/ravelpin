@@ -18,6 +18,8 @@ import (
 
 const imgWH = 224
 
+const CLASSIFYMODELNAME = "mobilenet"
+
 type byProbs []classification
 
 func (a byProbs) Len() int           { return len(a) }
@@ -50,9 +52,8 @@ func GetImage(imagelink string) (image.Image, error) {
 func ClasifyImageTest(imagelink string) []classification {
 	os.Setenv("TF_CPP_MIN_LOG_LEVEL", "2")
 
-	wd, _ := os.Getwd()
-
-	model := tfgo.LoadModel(fmt.Sprintf("%s/model", wd), []string{"serve"}, nil)
+	modelPath := fmt.Sprintf("./model/%s", CLASSIFYMODELNAME)
+	model := tfgo.LoadModel(modelPath, []string{"serve"}, nil)
 	srcImage, err := GetImage(imagelink)
 	if err != nil {
 		log.Fatal(err)
@@ -70,7 +71,7 @@ func ClasifyImageTest(imagelink string) []classification {
 		},
 	)
 
-	labels, _ := loadLabels("./model")
+	labels, _ := loadLabels(modelPath)
 
 	probabilities := results[0].Value().([][]float32)[0]
 

@@ -7,12 +7,14 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"slices"
 	"sort"
-	"strings"
 	"time"
 
+	"github.com/a-h/templ"
 	"github.com/joho/godotenv"
+	"github.com/shahanmmiah/ravelpin/components"
+	"github.com/shahanmmiah/ravelpin/handlers"
+	"github.com/shahanmmiah/ravelpin/internal/ratelimit"
 	"github.com/shahanmmiah/ravelpin/internal/recoginition"
 	"golang.org/x/net/html"
 )
@@ -59,7 +61,7 @@ func pintrestTest() string {
 
 	//fmt.Printf("%v data type: %v - attrs %v\n", data.FirstChild.Type, data.Data, data.Attr)
 
-	link, err := traverseHTML(res.Body, data, "link", 0.0)
+	link, err := traverseHTML(res.Body, data, "title", 0.0)
 
 	if err == nil {
 		return link
@@ -156,6 +158,37 @@ func RavelryTest(query string) []RavelryPattern {
 
 }
 
+func ravelParamTest() {
+	godotenv.Load()
+	APIUS := os.Getenv("RAVELRYAPIUS")
+	APIKEY := os.Getenv("RAVELRYAPIKEY")
+
+	url := "https://api.ravelry.com/pattern_attributes/groups.json"
+
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s", url), nil)
+	if err != nil {
+		log.Print("client: could not create request", err)
+		os.Exit(1)
+	}
+	req.SetBasicAuth(APIUS, APIKEY)
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Print("client: could not create request", err)
+		os.Exit(1)
+	}
+	defer res.Body.Close()
+	data, err := io.ReadAll(res.Body)
+
+	if err != nil {
+		log.Print("client: could not create request", err)
+		os.Exit(1)
+	}
+
+	log.Println(string(data))
+
+}
+
 func CompareRavelImages(patterns []RavelryPattern, trgpath string) (RavelryPattern, error) {
 
 	store := recoginition.CreateStore()
@@ -170,10 +203,6 @@ func CompareRavelImages(patterns []RavelryPattern, trgpath string) (RavelryPatte
 
 	}
 
-	testPhoto := RavelPhoto{MediumURL: "https://images4-f-cdn.ravelrycache.com/uploads/RenardeEndormie/928625511/IMG-1677_medium.jpg"}
-	test := RavelryPattern{Id: 1234, Name: "sunflowerSock", Permalink: "sunflower-fields-socks", FirstPhoto: testPhoto}
-	recoginition.AddToStore(store, test, test.FirstPhoto.MediumURL)
-
 	matches := store.Query(trgHash)
 	sort.Sort(matches)
 	pattern, _ := matches[0].ID.(RavelryPattern)
@@ -183,81 +212,156 @@ func CompareRavelImages(patterns []RavelryPattern, trgpath string) (RavelryPatte
 
 func traverseHTML(body io.Reader, node *html.Node, datatype string, level float64) (string, error) {
 
-	//fmt.Printf("level %f node %v --------- data %v ns %v\n", level, node.Data, node.Attr, node.Namespace)
+	//fmt.Printf("level %f node %v\n", level, node.Data)
 
-	/*if node.Data == "script" {
-		for _, attr := range node.Attr {
-			child := node.FirstChild
-			if attr.Key == "type" && attr.Val == "text/javascript" {
-				fmt.Printf("level %f node %v --------- data %v ns %v\n", level, node.Attr, child.Data, node.Namespace)
-				return nil
+	/*
+		if node.Data == "script" {
+			for _, attr := range node.Attr {
+				child := node.FirstChild
+				if attr.Key == "type" && attr.Val == "text/javascript" {
+					fmt.Printf("level %f node %v --------- data %v ns %v\n", level, node.Attr, child.Data, node.Namespace)
 
+				}
 			}
 		}
-	}
 	*/
+
+	for c := node.FirstChild; c != nil; c = c.NextSibling {
+		traverseHTML(body, c, datatype, level+1.0)
+
+	}
 
 	if node.Type == html.ElementNode && node.Data == datatype {
 
-		//fmt.Printf("level %f data type: %v - attrss %v\n", level, node.Data, node.Attr)
+		if node.FirstChild != nil {
 
-		imgNode := make(map[string]string, 0)
-
-		for _, attr := range node.Attr {
-			imgNode[attr.Key] = attr.Val
-		}
-
-		link, linkFound := imgNode["href"]
-		_, idFound := imgNode["id"]
-		as, asFound := imgNode["as"]
-
-		if linkFound && idFound && asFound && as == "image" {
-			return string(link), nil
-		}
-
-	}
-
-	for c := node.FirstChild; c != nil; c = c.NextSibling {
-		child, err := traverseHTML(body, c, datatype, level+1.0)
-
-		if err == nil {
-			return child, nil
+			fmt.Printf("level %f node %v\n", level, node.FirstChild.Data)
 		}
 	}
+	/*
 
-	return "", fmt.Errorf("no image link found")
+
+			fmt.Printf("level %f name %v data type: %v - attrss %v\n", level, *node, node.Data, node.Attr)
+
+
+					imgNode := make(map[string]string, 0)
+
+					for _, attr := range node.Attr {
+						imgNode[attr.Key] = attr.Val
+					}
+
+					link, linkFound := imgNode["href"]
+					_, idFound := imgNode["id"]
+					as, asFound := imgNode["as"]
+
+					if linkFound && idFound && asFound && as == "image" {
+						return string(link), nil
+					}
+
+				}
+
+
+
+				return "", fmt.Errorf("no image link found")
+
+		}
+	*/
+
+	return "", nil
+
+}
+
+type Server struct {
+	Mux       *http.ServeMux
+	RateLimit *ratelimit.RateLimiter
+}
+
+func (serv *Server) limitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := r.RemoteAddr
+
+		if serv.RateLimit.GetClientRateLimit(ip) {
+			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+			return
+		}
+		log.Printf("token left for you %v", serv.RateLimit.GetTokenAmount(ip))
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (serv *Server) templTest() {
+
+	component := components.HomePage()
+
+	serv.Mux.Handle("/", templ.Handler(component))
+
+	fmt.Println("Listening on :3000")
+
+	err := handlers.HandleHandler(serv.Mux, serv.limitMiddleware(handlers.MiddleWareGetRavelLink()), "/link", "POST")
+	if err != nil {
+		log.Panicf("error handler %v", err.Error())
+	}
+
+	server := http.Server{
+		Handler: serv.Mux,
+		Addr:    ":3000",
+	}
+
+	server.ListenAndServe()
+
 }
 
 func main() {
 
-	link := pintrestTest()
-	//testlink := "https://i.pinimg.com/736x/06/78/c1/0678c12bb5acb9d93854013af00613a0.jpg"
-	if link != "" {
-		fmt.Println(link)
-
-		testRavelSearchTerms := map[string]any{
-			"garment": []string{"sweater", "pancho", "cardigan", "trousers", "jean", "sock"},
-		}
-		classified := recoginition.ClasifyImageTest(link)
-
-		fmt.Printf("found %v\n", classified)
-		fmt.Println("best guesses are:")
-
-		for _, cls := range classified {
-
-			garmList, _ := testRavelSearchTerms["garment"].([]string)
-
-			if slices.Contains(garmList, strings.ToLower(cls.Label)) {
-				fmt.Printf("%v\n", cls.Label)
-				ravPatterns := RavelryTest(cls.Label)
-
-				bestMatchPattern, _ := CompareRavelImages(ravPatterns, link)
-				fmt.Println(bestMatchPattern)
-			}
-		}
-
+	//ravelParamTest()
+	//pintrestTest()
+	server := Server{
+		Mux:       http.NewServeMux(),
+		RateLimit: ratelimit.NewRateLimiter(),
 	}
 
-	//recoginition.TestPrint()
+	server.templTest()
+
+	/*
+		testStr := "Seasalt Socks pattern by The Wool Barn Knits."
+
+		err := recoginition.Ner(testStr)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+
+
+
+			//testlink := "https://i.pinimg.com/736x/06/78/c1/0678c12bb5acb9d93854013af00613a0.jpg"
+			if link != "" {
+				fmt.Println(link)
+
+				testRavelSearchTerms := map[string]any{
+					"garment": []string{"sweater", "pancho", "cardigan", "trousers", "jean", "sock"},
+				}
+				classified := recoginition.ClasifyImageTest(link)
+
+				fmt.Printf("found %v\n", classified)
+				fmt.Println("best guesses are:")
+
+				for _, cls := range classified {
+
+					garmList, _ := testRavelSearchTerms["garment"].([]string)
+
+					if slices.Contains(garmList, strings.ToLower(cls.Label)) {
+						fmt.Printf("%v\n", cls.Label)
+						ravPatterns := RavelryTest(cls.Label)
+
+						bestMatchPattern, _ := CompareRavelImages(ravPatterns, link)
+						fmt.Println(bestMatchPattern)
+					}
+				}
+
+			}
+
+			//recoginition.TestPrint()
+	*/
 
 }

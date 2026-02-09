@@ -19,26 +19,6 @@ func CompareImage(srcpath, trgpath string) (duplo.Match, error) {
 
 }
 
-func CompareItems(srcItems []any, srcImgPath, trgpath string) (duplo.Matches, error) {
-
-	store := CreateStore()
-
-	trgHash, err := CreateHash(trgpath)
-	if err != nil {
-		return duplo.Matches{}, err
-
-	}
-	for _, src := range srcItems {
-		AddToStore(store, src, srcImgPath)
-
-	}
-
-	matches := store.Query(trgHash)
-
-	return matches, nil
-
-}
-
 func CreateStore() *duplo.Store {
 	return duplo.New()
 }
