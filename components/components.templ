@@ -2,11 +2,18 @@ package components
 
 
 
+css SearchBarStyle() {
+    border-radius: 28px;
+    border: 4px solid grey;
+    color: { "#0000ff" };
+
+
+}
 
 templ SearchBar() {
-    <form id="form" action="/link" method="post" hx-boost="true">
-      <label for="pin url"></label>
+    <form class="searchBar" id="form" action="/link" method="post" hx-boost="true">
       <input type="url" id="pinlink" name="pinlink" class="form-control" placeholder="Pintrest URL: "/>
+      <button class={"searchButton", SearchBarStyle() } type="submit">Submit</button>
 </form>
 }
 
