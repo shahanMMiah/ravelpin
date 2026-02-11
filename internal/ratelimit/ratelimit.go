@@ -6,8 +6,8 @@ import (
 	"golang.org/x/time/rate"
 )
 
-const REQNUM = 5
-const BURST = 10
+const REQNUM = 0
+const BURST = 4
 
 type RateLimiter struct {
 	sync.RWMutex
@@ -28,7 +28,7 @@ func (rl *RateLimiter) GetClientRateLimit(ip string) bool {
 	rl.Lock()
 	rl.Clients[ip] = rate.NewLimiter(REQNUM, BURST)
 	rl.Unlock()
-	return false
+	return true
 }
 
 func (rl *RateLimiter) GetTokenAmount(ip string) float64 {

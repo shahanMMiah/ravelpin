@@ -280,11 +280,12 @@ func (serv *Server) limitMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := r.RemoteAddr
 
-		if serv.RateLimit.GetClientRateLimit(ip) {
+		log.Printf("token left for you %v", serv.RateLimit.GetTokenAmount(ip))
+
+		if !serv.RateLimit.GetClientRateLimit(ip) {
 			http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 			return
 		}
-		log.Printf("token left for you %v", serv.RateLimit.GetTokenAmount(ip))
 
 		next.ServeHTTP(w, r)
 	})
