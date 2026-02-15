@@ -22,26 +22,36 @@ func HandleHandler(mux *http.ServeMux, handle http.Handler, endpoint, mthd strin
 	return nil
 }
 
+func MiddleWareServeFile(file string) http.Handler {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+
+		http.ServeFile(resp, req, file)
+	})
+}
+
 func MiddleWareGetRavelLink() http.Handler {
 	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
 
 		err := req.ParseForm()
 		if err != nil {
-			log.Println("could not parse form, %v", err.Error())
-
-		}
-
-		if err != nil {
-			log.Println("could not parse form, %v", err.Error())
+			log.Printf("could not parse form, %v", err.Error())
+			resp.WriteHeader(http.StatusBadRequest)
+			resp.Write([]byte(err.Error()))
+			return
 
 		}
 
 		//log.Printf("post body: %v ", ))
 		pinLink := string(req.PostForm.Get("pinlink"))
+
+		log.Printf("looking at pinlink %v", pinLink)
 		ravelUrl, err := HandlerFindRavelFromPin(pinLink, replCommand.ImageSearch)
 
 		if err != nil {
-			log.Println("could not parse form, %v", err.Error())
+			log.Printf("could not find ravelry link, %v", err.Error())
+			resp.WriteHeader(http.StatusBadRequest)
+			resp.Write([]byte(err.Error()))
+			return
 
 		}
 

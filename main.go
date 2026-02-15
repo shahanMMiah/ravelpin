@@ -292,9 +292,12 @@ func (serv *Server) limitMiddleware(next http.Handler) http.Handler {
 
 func (serv *Server) templTest() {
 
+	fileServerHandle := handlers.MiddleWareServeFile("./assets/js/htmx.min.js")
+	handlers.HandleHandler(serv.Mux, fileServerHandle, "/assets/js/htmx.min.js", "GET")
+
 	component := components.HomePage()
 
-	serv.Mux.Handle("/", templ.Handler(component))
+	serv.Mux.Handle("/{$}", templ.Handler(component))
 
 	fmt.Println("Listening on :3000")
 
