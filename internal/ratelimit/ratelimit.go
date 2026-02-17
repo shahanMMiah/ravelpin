@@ -6,7 +6,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-const REQNUM = 0
+const REQNUM = 1
 const BURST = 4
 
 type RateLimiter struct {

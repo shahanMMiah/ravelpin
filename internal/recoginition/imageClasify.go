@@ -18,8 +18,6 @@ import (
 
 const imgWH = 224
 
-const CLASSIFYMODELNAME = "mobilenet"
-
 type byProbs []classification
 
 func (a byProbs) Len() int           { return len(a) }
@@ -32,6 +30,11 @@ type classification struct {
 }
 
 type Labels []string
+
+type ClassifyModel struct {
+	Model *tfgo.Model
+	Path  string
+}
 
 func GetImage(imagelink string) (image.Image, error) {
 	response, err := http.Get(imagelink)
@@ -49,11 +52,20 @@ func GetImage(imagelink string) (image.Image, error) {
 
 }
 
-func ClasifyImageTest(imagelink string) []classification {
-	os.Setenv("TF_CPP_MIN_LOG_LEVEL", "2")
+func NewModel() *ClassifyModel {
 
-	modelPath := fmt.Sprintf("./model/%s", CLASSIFYMODELNAME)
-	model := tfgo.LoadModel(modelPath, []string{"serve"}, nil)
+	return new(ClassifyModel)
+}
+
+func (mdl *ClassifyModel) LoadModel(modelPath string) {
+	os.Setenv("TF_CPP_MIN_LOG_LEVEL", "2")
+	mdl.Model = tfgo.LoadModel(modelPath, []string{"serve"}, nil)
+	mdl.Path = modelPath
+
+}
+
+func (mdl *ClassifyModel) ClassifyImage(imagelink string) []classification {
+
 	srcImage, err := GetImage(imagelink)
 	if err != nil {
 		log.Fatal(err)
@@ -62,16 +74,16 @@ func ClasifyImageTest(imagelink string) []classification {
 
 	imgTensor, _ := newImgTensor(imgWH, imgWH, scaledImg)
 
-	results := model.Exec(
+	results := mdl.Model.Exec(
 		[]tensorflow.Output{
-			model.Op("StatefulPartitionedCall", 0),
+			mdl.Model.Op("StatefulPartitionedCall", 0),
 		},
 		map[tensorflow.Output]*tensorflow.Tensor{
-			model.Op("serving_default_inputs", 0): imgTensor,
+			mdl.Model.Op("serving_default_inputs", 0): imgTensor,
 		},
 	)
 
-	labels, _ := loadLabels(modelPath)
+	labels, _ := loadLabels(mdl.Path)
 
 	probabilities := results[0].Value().([][]float32)[0]
 
@@ -89,10 +101,6 @@ func ClasifyImageTest(imagelink string) []classification {
 	sort.Sort(byProbs(classifications))
 	return classifications
 
-}
-
-func TestPrint() {
-	fmt.Println("from recognition package")
 }
 
 func loadLabels(path string) ([]string, error) {
@@ -136,4 +144,48 @@ func newImgTensor(imageHeight, imageWidth int, img *image.NRGBA) (*tensorflow.Te
 
 func convertValue(value uint32) float32 {
 	return (float32(value >> 8)) / float32(255)
+}
+
+/* LEGACY TEST TO REMOVE*/
+
+func ClasifyImageTest(imagelink string) []classification {
+	os.Setenv("TF_CPP_MIN_LOG_LEVEL", "2")
+
+	modelPath := fmt.Sprintf("./model/%s", "mobilenet")
+	model := tfgo.LoadModel(modelPath, []string{"serve"}, nil)
+	srcImage, err := GetImage(imagelink)
+	if err != nil {
+		log.Fatal(err)
+	}
+	scaledImg := imaging.Fill(srcImage, imgWH, imgWH, imaging.Center, imaging.Lanczos)
+
+	imgTensor, _ := newImgTensor(imgWH, imgWH, scaledImg)
+
+	results := model.Exec(
+		[]tensorflow.Output{
+			model.Op("StatefulPartitionedCall", 0),
+		},
+		map[tensorflow.Output]*tensorflow.Tensor{
+			model.Op("serving_default_inputs", 0): imgTensor,
+		},
+	)
+
+	labels, _ := loadLabels(modelPath)
+
+	probabilities := results[0].Value().([][]float32)[0]
+
+	classifications := []classification{}
+	for i, p := range probabilities {
+		if p < 5 {
+			continue
+		}
+		classifications = append(classifications, classification{
+			Label:       strings.ToLower(labels[i]),
+			Probability: p,
+		})
+	}
+
+	sort.Sort(byProbs(classifications))
+	return classifications
+
 }

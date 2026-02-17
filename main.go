@@ -81,7 +81,7 @@ func pintrestTest() string {
 }
 
 func RavelryTest(query string) []RavelryPattern {
-	godotenv.Load()
+	//godotenv.Load()
 	APIUS := os.Getenv("RAVELRYAPIUS")
 	APIKEY := os.Getenv("RAVELRYAPIKEY")
 
@@ -159,7 +159,7 @@ func RavelryTest(query string) []RavelryPattern {
 }
 
 func ravelParamTest() {
-	godotenv.Load()
+
 	APIUS := os.Getenv("RAVELRYAPIUS")
 	APIKEY := os.Getenv("RAVELRYAPIKEY")
 
@@ -290,7 +290,7 @@ func (serv *Server) limitMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func (serv *Server) templTest() {
+func (serv *Server) templTest(clasifyModel *recoginition.ClassifyModel) {
 
 	fileServerHandle := handlers.MiddleWareServeFile("./assets/js/htmx.min.js")
 	handlers.HandleHandler(serv.Mux, fileServerHandle, "/assets/js/htmx.min.js", "GET")
@@ -301,7 +301,7 @@ func (serv *Server) templTest() {
 
 	fmt.Println("Listening on :3000")
 
-	err := handlers.HandleHandler(serv.Mux, serv.limitMiddleware(handlers.MiddleWareGetRavelLink()), "/link", "POST")
+	err := handlers.HandleHandler(serv.Mux, serv.limitMiddleware(handlers.MiddleWareGetRavelLink(clasifyModel)), "/link", "POST")
 	if err != nil {
 		log.Panicf("error handler %v", err.Error())
 	}
@@ -319,12 +319,17 @@ func main() {
 
 	//ravelParamTest()
 	//pintrestTest()
+	godotenv.Load()
+	imageClassifyModel := recoginition.NewModel()
+
+	imageClassifyModel.LoadModel(fmt.Sprintf("./model/%s", os.Getenv("CLASSIFYMODELNAME")))
+
 	server := Server{
 		Mux:       http.NewServeMux(),
 		RateLimit: ratelimit.NewRateLimiter(),
 	}
 
-	server.templTest()
+	server.templTest(imageClassifyModel)
 
 	/*
 		testStr := "Seasalt Socks pattern by The Wool Barn Knits."

@@ -1,5 +1,9 @@
 package components
 
+import "fmt"
+
+import ("github.com/shahanmmiah/ravelpin/services")
+
 css SearchBarStyle() {
     background: #ffffff;
     border: 1px solid #e0e0e0;
@@ -13,6 +17,14 @@ css SearchBarStyle() {
 
 }
 
+css RavelBoxStyle(){
+    border: 3px solid #e0e0e0;
+    border-radius: 16px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    width: 50%;
+   
+}
+
 css HeaderBarStyle() {
     display: flex;
     align-items: center;
@@ -23,6 +35,13 @@ css HeaderBarStyle() {
 
 }
 
+css BodyStyle(){
+    display: flex;
+    width: 100%;
+    overflow-x: auto;
+    
+}
+
 css HeaderTitleStyle(){
     font-size: 1rem;
     font-weight: 800;
@@ -31,33 +50,87 @@ css HeaderTitleStyle(){
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     animation: gradient-flow 3s linear infinite;
-     
 
-    
+}
+
+css RavelTitleStyle(){
+    font-size: 1rem;
+    font-weight: 800;
+    background: linear-gradient(90deg, #ff00cc, #3333ff, #ff00cc);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradient-flow 3s linear infinite;
+    display: block;
+    font-size: 1rem;
+    font-weight: 800;
+    background-size: 200% auto;
+
 }
 
 css HeaderSpacerStyle(){
     flex: 1;
 }
 
-templ SearchBar() {
-    <header>
-        <div class={"headerBar",  HeaderBarStyle()}>
-            <div class={"header-title", HeaderTitleStyle()}><h1>RavelPin</h1></div>
-            <div class="search-container">
-            <form class="searchBar" id="form" action="/link" method="post" hx-boost="true">
-                <input class={"SearchBar", SearchBarStyle()} name="pinlink" id="pinlink" type="url" placeholder="Pintrest post:">
-            </form>
-            </div>
+
+css SpinnerStyle(){
+    width: 48px;
+    height: 48px;
+    border: 5px solid #FFF;
+    border-bottom-color: transparent;
+    border-radius: 50%;
+    display: inline-block;
+    box-sizing: border-box;
+    animation: rotation 1s linear infinite;
+}
+
+templ RavelPost(pattern services.RavelryPattern){
+    <div class = {"patternBox", RavelBoxStyle()}>
+        <img class={fmt.Sprintf("%sPatternImage", pattern.Permalink)} 
+        fetchpriority="high" loading="auto" src={pattern.FirstPhoto.MediumURL}>
+        <br>
+         <div>  
+            <a class={"patternBoxTitle", RavelTitleStyle()} href={fmt.Sprintf("https://www.ravelry.com/patterns/library/%s", pattern.Permalink)}>{pattern.Name}</a> 
         </div>
-        <div class={"header-spacer", HeaderSpacerStyle()}></div>
-    </header>
+    </div>
+
+    
+   
+    
+}
+
+templ RavelPosts(patterns []services.RavelryPattern){
+    <div class={"paternBoxes", BodyStyle()}>
+        for _, pattern := range patterns{
+            @RavelPost(pattern)
+        }
+    </div>
+
 }
 
 templ HomePage(){
     <head><script src="/assets/js/htmx.min.js"></script></head>
+    <header>
+        <div class={"headerBar",  HeaderBarStyle()}>
+            <div class={"header-title", HeaderTitleStyle()}><h1>RavelPin</h1></div>
+            <div class="search-container">
+            <form class="searchBar" id="form-control" method="POST" hx-post="/link" hx-target="#mainBody" hx-swap="outerHTML" hx-indicator="#spinner">
+                <input class={"SearchBar", SearchBarStyle()} name="pinlink" id="pinlink" type="url" placeholder="Pintrest post:" >
+            </form>
+            <span id="spinner" class={"htmx-indicator", SpinnerStyle()}>
+                Loading...
+            </span>
+            </div>
+        </div>
+        <div class={"header-spacer", HeaderSpacerStyle()}></div>
+    </header>
+    <main id="mainBody">
+        <p>Nothing here...</p>
+    </main>
     
-    @SearchBar()
+
+
+
     
      
 }
