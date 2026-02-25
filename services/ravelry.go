@@ -6,8 +6,6 @@ import (
 	"github.com/shahanmmiah/ravelpin/internal/recoginition"
 )
 
-const POSTAMOUNT = 3
-
 type RavelPhoto struct {
 	MediumURL string `json:"medium_url"`
 }
@@ -37,6 +35,10 @@ func GetBestsImages(patterns []RavelryPattern, trgpath string, postAmount int) (
 	sort.Sort(matches)
 	bestPatterns := make([]RavelryPattern, 0)
 
+	if len(matches) < postAmount {
+		postAmount = len(matches)
+
+	}
 	for num := range postAmount {
 		bestPatterns = append(bestPatterns, matches[num].ID.(RavelryPattern))
 	}

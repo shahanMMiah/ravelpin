@@ -39,6 +39,7 @@ css BodyStyle(){
     display: flex;
     width: 100%;
     overflow-x: auto;
+   
     
 }
 
@@ -94,16 +95,45 @@ templ RavelPost(pattern services.RavelryPattern){
         </div>
     </div>
 
-    
-   
-    
+        
 }
 
+
 templ RavelPosts(patterns []services.RavelryPattern){
-    <div class={"paternBoxes", BodyStyle()}>
+    <div id="mainBody" class={"paternBoxes", BodyStyle()} hx-swap-oob="true">
         for _, pattern := range patterns{
+            <div>
             @RavelPost(pattern)
+            </div>
         }
+    </div>
+
+}
+
+
+templ Log(log string){
+
+    <div id="logBody">
+
+        <p>{log}</p>
+
+    </div>
+
+}
+
+templ LogList(endpoints []string){
+    <head><script src="/assets/js/htmx.min.js"></script></head>
+    <div class={"logList"}>
+    for _, end := range endpoints{
+        <form id="logButton" hx-post="/log" hx-target="#logBody" hx-swap="outerHTML">
+            <input value={end} name="logFile"></input>
+        </form><br>
+    }
+    </div>
+    <div id="logBody">
+
+        <p>Nothing here...</p>
+
     </div>
 
 }
@@ -114,7 +144,7 @@ templ HomePage(){
         <div class={"headerBar",  HeaderBarStyle()}>
             <div class={"header-title", HeaderTitleStyle()}><h1>RavelPin</h1></div>
             <div class="search-container">
-            <form class="searchBar" id="form-control" method="POST" hx-post="/link" hx-target="#mainBody" hx-swap="outerHTML" hx-indicator="#spinner">
+            <form class="searchBar" hx-post="/link" hx-target="#mainBody" hx-swap="outerHTML" hx-indicator="#spinner">
                 <input class={"SearchBar", SearchBarStyle()} name="pinlink" id="pinlink" type="url" placeholder="Pintrest post:" >
             </form>
             <span id="spinner" class={"htmx-indicator", SpinnerStyle()}>
@@ -128,7 +158,6 @@ templ HomePage(){
         <p>Nothing here...</p>
     </main>
     
-
 
 
     

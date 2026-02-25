@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"image"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"sort"
@@ -68,7 +68,7 @@ func (mdl *ClassifyModel) ClassifyImage(imagelink string) []classification {
 
 	srcImage, err := GetImage(imagelink)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
 	}
 	scaledImg := imaging.Fill(srcImage, imgWH, imgWH, imaging.Center, imaging.Lanczos)
 
@@ -155,7 +155,7 @@ func ClasifyImageTest(imagelink string) []classification {
 	model := tfgo.LoadModel(modelPath, []string{"serve"}, nil)
 	srcImage, err := GetImage(imagelink)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error(err.Error())
 	}
 	scaledImg := imaging.Fill(srcImage, imgWH, imgWH, imaging.Center, imaging.Lanczos)
 

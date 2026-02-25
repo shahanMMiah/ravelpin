@@ -1,8 +1,6 @@
 package recoginition
 
 import (
-	"fmt"
-
 	"github.com/sugarme/tokenizer/pretrained"
 )
 
@@ -33,10 +31,6 @@ func Tokenize(sentence string) (TokenInput, error) {
 	if err != nil {
 		return TokenInput{}, err
 	}
-
-	fmt.Printf("tokens: %q\n", en.Tokens)
-	//fmt.Printf("masks: %v\n", en.AttentionMask)
-	//fmt.Printf("inout ids: %v\n", en.Ids)
 
 	inputs := TokenInput{}
 

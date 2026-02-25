@@ -6,13 +6,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/a-h/templ"
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/shahanmmiah/ravelpin/components"
+	"github.com/shahanmmiah/ravelpin/internal/logging"
 	"github.com/shahanmmiah/ravelpin/internal/recoginition"
 	"github.com/shahanmmiah/ravelpin/services"
 )
@@ -43,23 +46,36 @@ func MiddleWareServeFile(file string) http.Handler {
 func MiddleWareGetRavelLink(clasifyModel *recoginition.ClassifyModel) http.Handler {
 	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
 
-		err := req.ParseForm()
+		requestId := uuid.New()
+
+		logObj, err := logging.MakeLoggerObject(requestId)
 		if err != nil {
-			log.Printf("could not parse form, %v", err.Error())
+			slog.ErrorContext(req.Context(), fmt.Sprintf("could not log request, %v", err.Error()))
+
+			resp.WriteHeader(http.StatusInternalServerError)
+			resp.Write([]byte(err.Error()))
+			return
+
+		}
+
+		logger := slog.New(logObj.LogHandler)
+		slog.SetDefault(logger)
+		err = req.ParseForm()
+		if err != nil {
+			logger.InfoContext(req.Context(), fmt.Sprintf("could not parse form, %v", err.Error()))
 			resp.WriteHeader(http.StatusBadRequest)
 			resp.Write([]byte(err.Error()))
 			return
 
 		}
 
-		//log.Printf("post body: %v ", ))
 		pinLink := string(req.PostForm.Get("pinlink"))
 
-		log.Printf("looking at pinlink %v", pinLink)
+		slog.InfoContext(req.Context(), fmt.Sprintf("looking at pinlink %v", pinLink))
 		ravelPatterns, err := HandlerFindRavelFromPins(pinLink, MiddleWareModelPreload(clasifyModel, services.ImageClasify))
 
 		if err != nil {
-			log.Printf("could not find ravelry links, %v", err.Error())
+			logger.InfoContext(req.Context(), fmt.Sprintf("could not find ravelry links, %v", err.Error()))
 
 			resp.WriteHeader(http.StatusBadRequest)
 			resp.Write([]byte(err.Error()))
@@ -68,24 +84,23 @@ func MiddleWareGetRavelLink(clasifyModel *recoginition.ClassifyModel) http.Handl
 		}
 
 		htmlComponents := components.RavelPosts(ravelPatterns)
-		w := new(bytes.Buffer)
+		w, err := MarhalComponent(htmlComponents)
 
-		err = htmlComponents.Render(context.Background(), w)
 		if err != nil {
-			log.Printf("could not render html components, %v", err.Error())
+			logger.ErrorContext(req.Context(), fmt.Sprintf("could not render html components, %v", err.Error()))
 
 			resp.WriteHeader(http.StatusBadRequest)
 			resp.Write([]byte(err.Error()))
 			return
 
 		}
-		log.Printf("%v", w.String())
 
+		resp.WriteHeader(http.StatusOK)
 		resp.Header().Set("Content-Type", "text/html")
-		resp.Write([]byte(w.String()))
-		//templ.Handler(htmlComponents).ServeHTTP(resp, req)
-		//http.Redirect(resp, req, ravelUrl, http.StatusSeeOther)
-		//resp.WriteHeader(400)
+		resp.Write(w.Bytes())
+
+		logger.InfoContext(req.Context(), "Request Complete", slog.String("URI", req.RequestURI), slog.String("input", req.FormValue("pinlink")))
+		logObj.CloseLogFile()
 
 	})
 }
@@ -94,6 +109,101 @@ func MiddleWareModelPreload(model *recoginition.ClassifyModel, mdl func(string, 
 	return func(s string) ([]string, error) {
 		return mdl(s, model)
 	}
+}
+
+func HandlerGetLog() http.Handler {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		err := req.ParseForm()
+		if err != nil {
+			resp.WriteHeader(http.StatusBadRequest)
+			resp.Write([]byte(fmt.Sprintf("Unable to parse form %s", err.Error())))
+			return
+		}
+
+		file := req.Form.Get("logFile")
+
+		if file != "" {
+			log, err := logging.GetLog(file)
+
+			if err != nil {
+				resp.WriteHeader(http.StatusInternalServerError)
+				resp.Write([]byte(fmt.Sprintf("Unable to load log %s", err.Error())))
+				return
+			}
+
+			slog.InfoContext(req.Context(), fmt.Sprintf("log file content : %v", log))
+
+			logHTML := components.Log(log)
+			w, err := MarhalComponent(logHTML)
+			if err != nil {
+				resp.WriteHeader(http.StatusInternalServerError)
+				resp.Write([]byte(fmt.Sprintf("Unable to Marshal log %s", err.Error())))
+
+				return
+
+			}
+
+			slog.InfoContext(req.Context(), fmt.Sprintf("log file content : %v", w.String()))
+
+			resp.WriteHeader(http.StatusOK)
+			resp.Header().Set("Content-Type", "text/html")
+			resp.Write(w.Bytes())
+			return
+
+		}
+
+		resp.WriteHeader(http.StatusNotFound)
+		resp.Write([]byte(fmt.Sprintf("cannot find log %s", err.Error())))
+
+	})
+}
+
+func MarhalComponent(htmlComponents templ.Component) (*bytes.Buffer, error) {
+	w := new(bytes.Buffer)
+
+	err := htmlComponents.Render(context.Background(), w)
+	if err != nil {
+		return nil, err
+
+	}
+
+	return w, nil
+
+}
+
+func HandlerGetLogs(mux *http.ServeMux) http.Handler {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+
+		dir, err := os.ReadDir(os.Getenv("LOGPATH"))
+		if err != nil {
+			resp.WriteHeader(http.StatusInternalServerError)
+			resp.Write([]byte("could not find save logs"))
+			return
+		}
+
+		ends := make([]string, 0)
+		for _, file := range dir {
+			ends = append(ends, file.Name())
+		}
+
+		htmlComponents := components.LogList(ends)
+
+		w, err := MarhalComponent(htmlComponents)
+
+		if err != nil {
+			slog.ErrorContext(req.Context(), fmt.Sprintf("could not render html components, %v", err.Error()))
+			resp.WriteHeader(http.StatusBadRequest)
+			resp.Write([]byte(err.Error()))
+			return
+		}
+
+		resp.WriteHeader(http.StatusOK)
+		resp.Header().Set("Content-Type", "text/html")
+		resp.Write(w.Bytes())
+
+		//slog.InfoContext(req.Context(), w.String())
+
+	})
 }
 
 func HandlerFindRavelFromPins(link string, clasifyCommand func(string) ([]string, error)) ([]services.RavelryPattern, error) {
@@ -107,14 +217,13 @@ func HandlerFindRavelFromPins(link string, clasifyCommand func(string) ([]string
 	searchQueries, err := clasifyCommand(link)
 
 	ravPatterns, err := GetRavelPatterns(searchQueries)
-	fmt.Printf("found %v ravelry posts\n", len(ravPatterns))
 
 	if err != nil {
 		return []services.RavelryPattern{}, err
 	}
 
 	if len(ravPatterns) > 0 {
-		fmt.Println("comparing found ravelry posts to pintrest image...")
+		slog.Info("comparing found ravelry posts to pintrest image...", slog.Any("postFound", ravPatterns))
 		bestMatchPatterns, err := services.GetBestsImages(ravPatterns, pinLink, POSTAMOUNT)
 
 		if err != nil {
@@ -140,7 +249,7 @@ func GetRavelPatterns(queries []string) ([]services.RavelryPattern, error) {
 
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s", url), nil)
 	if err != nil {
-		log.Print("client: could not create request", err)
+		slog.Error(fmt.Sprintf("client: could not create request %v", err.Error()))
 		os.Exit(1)
 	}
 	params := req.URL.Query()
@@ -163,7 +272,7 @@ func GetRavelPatterns(queries []string) ([]services.RavelryPattern, error) {
 
 	req.URL.RawQuery = params.Encode()
 
-	log.Printf("params to search : %v", params.Encode())
+	slog.InfoContext(req.Context(), fmt.Sprintf("params to search : %v", params.Encode()))
 
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth(APIUS, APIKEY)

@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strings"
@@ -131,15 +132,14 @@ func ImageClasify(link string, model *recoginition.ClassifyModel) ([]string, err
 	if len(classified) < 1 {
 		return nil, fmt.Errorf("couldnt classify whats in the image :(")
 	}
-	fmt.Printf("classified labels found %v\n", classified)
-	fmt.Println("best guesses of what is in pintrest image:")
+	slog.Info(fmt.Sprintf("classified labels found %v\n", classified), slog.Any("labels", classified))
 
 	for _, cls := range classified {
 
 		garmList, _ := testRavelSearchTerms["garment"].([]string)
 
 		if slices.Contains(garmList, strings.ToLower(cls.Label)) {
-			fmt.Printf("%v\n", cls.Label)
+
 			clsItems = append(clsItems, cls.Label)
 
 		}

@@ -40,3 +40,6 @@ func (rl *RateLimiter) GetTokenAmount(ip string) float64 {
 	}
 	return 0.0
 }
+
+// todo:
+// remove map keys bucket is empty
