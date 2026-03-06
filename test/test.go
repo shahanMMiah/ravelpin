@@ -1,11 +1,18 @@
 package test
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/shahanmmiah/ravelpin/handlers"
+	"github.com/shahanmmiah/ravelpin/internal/auth"
+	"github.com/shahanmmiah/ravelpin/internal/database"
 )
 
 func ravelParamTest() {
@@ -36,5 +43,23 @@ func ravelParamTest() {
 	}
 
 	log.Println(string(data))
+
+}
+
+func TestMakeAdminUser(cfg *handlers.ApiConfig) {
+	password, _ := auth.HashPassword("admin")
+
+	cfg.Db.ResetUsers(context.Background())
+	_, err := cfg.Db.CreateUser(context.Background(),
+		database.CreateUserParams{
+			ID:             uuid.New(),
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
+			Email:          "admin@ravelpin.com",
+			HashedPassword: password})
+
+	if err != nil {
+		panic(fmt.Sprintf("error creating user %v", err))
+	}
 
 }

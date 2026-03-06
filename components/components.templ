@@ -138,6 +138,23 @@ templ LogList(endpoints []string){
 
 }
 
+templ Login(){
+    <div>
+        <form class={"loginForm"} id="loginForm" hx-post="/login" hx-target="#loginForm" hx-swap="outerHTML"  hx-trigger="submit">
+            <input class="email-form" name="email" id="email" type="email" placeholder="Email:">
+            <input class="password-form" name="password" id="password" type="password" placeholder="Password:">
+            <button type="submit">Login</button>
+            
+        </form>
+    </div>
+}
+
+templ Logout(){
+    <div>
+     <button class={"logoutBtn"} id="logoutBtn" hx-target="#logoutBtn" hx-swap="outerHTML" hx-post="/logout" hx-trigger="click">Logout</button>
+    </div>
+}
+
 templ HomePage(){
     <head><script src="/assets/js/htmx.min.js"></script></head>
     <header>
@@ -147,6 +164,7 @@ templ HomePage(){
             <form class="searchBar" hx-post="/link" hx-target="#mainBody" hx-swap="outerHTML" hx-indicator="#spinner">
                 <input class={"SearchBar", SearchBarStyle()} name="pinlink" id="pinlink" type="url" placeholder="Pintrest post:" >
             </form>
+            @Login()
             <span id="spinner" class={"htmx-indicator", SpinnerStyle()}>
                 Loading...
             </span>

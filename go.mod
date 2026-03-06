@@ -9,11 +9,13 @@ require (
 	github.com/disintegration/imaging v1.6.2
 	github.com/galeone/tensorflow/tensorflow/go v0.0.0-20221023090153-6b7fa0680c3e
 	github.com/galeone/tfgo v0.0.0-20230715013254-16113111dc99
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.11.2
 	github.com/rivo/duplo v0.0.0-20220703183130-751e882e6b83
 	github.com/sugarme/tokenizer v0.3.0
+	golang.org/x/crypto v0.46.0
 	golang.org/x/net v0.48.0
 	golang.org/x/time v0.14.0
 )
