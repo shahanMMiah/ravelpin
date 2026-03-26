@@ -13,25 +13,6 @@ import (
 
 const RaVELPIN = "ravelPin"
 
-/*
-http.SetCookie(w, &http.Cookie{
-    Name:     "token",
-    Value:    jwtToken,
-    HttpOnly: true,
-    Secure:   true,
-    SameSite: http.SameSiteStrictMode,
-    Path:     "/",
-})
-
-cookie, err := r.Cookie("token")
-if err != nil {
-    // No token, redirect to login
-}
-jwtToken := cookie.Value
-// Validate the token...
-
-*/
-
 func HashPassword(password string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 
@@ -47,8 +28,8 @@ func CheckPasswordHash(password, hash string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 }
 
-func MakeRefreshToken() (string, error) {
-	randBytes := make([]byte, 32)
+func MakeToken(byteAmount int) (string, error) {
+	randBytes := make([]byte, byteAmount)
 	rand.Read(randBytes)
 	hexString := hex.EncodeToString(randBytes)
 
@@ -84,8 +65,10 @@ func ValidateJWT(signedToken, tokenSecret string) (uuid.UUID, error) {
 		return uuid.UUID{}, fmt.Errorf("subject faulure:  %s", err.Error())
 	}
 	id, err := uuid.Parse(subject)
+
 	if err != nil {
 		return uuid.UUID{}, fmt.Errorf("uuid parse faulure:  %s", err.Error())
 	}
+
 	return id, nil
 }

@@ -4,6 +4,8 @@ import "fmt"
 
 import ("github.com/shahanmmiah/ravelpin/services")
 
+// top bar styles
+
 css SearchBarStyle() {
     background: #ffffff;
     border: 1px solid #e0e0e0;
@@ -13,37 +15,34 @@ css SearchBarStyle() {
     width: 500px;
     height: 50px;
 
-
-
-}
-
-css RavelBoxStyle(){
-    border: 3px solid #e0e0e0;
-    border-radius: 16px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-    width: 50%;
-   
 }
 
 css HeaderBarStyle() {
     display: flex;
+    flex-direction: row;
     align-items: center;
     background-color: #f4f4f4;
-    gap: 300px; 
+    gap: 100px; 
     padding: 15px 20px;
-
-
+    justify-content: space-between;
 }
 
-css BodyStyle(){
-    display: flex;
-    width: 100%;
-    overflow-x: auto;
-   
-    
+css SpinnerStyle(){
+    width: 48px;
+    height: 48px;
+    border: 5px solid #FFF;
+    border-bottom-color: transparent;
+    border-radius: 50%;
+    display: inline-block;
+    box-sizing: border-box;
+    animation: rotation 1s linear infinite;
 }
 
-css HeaderTitleStyle(){
+css HeaderSpacerStyle(){
+    flex: 1;
+}
+
+css FontStyle(){
     font-size: 1rem;
     font-weight: 800;
     background: linear-gradient(90deg, #ff00cc, #3333ff, #ff00cc);
@@ -53,6 +52,39 @@ css HeaderTitleStyle(){
     animation: gradient-flow 3s linear infinite;
 
 }
+
+css TitleStyle(){
+    font-size: 3rem;
+    font-weight: 800;
+    background: linear-gradient(90deg, #ff00cc, #3333ff, #ff00cc);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradient-flow 3s linear infinite;
+
+}
+
+
+// ravelery posts styles
+
+css RavelBoxStyle(){
+    border: 3px solid #e0e0e0;
+    border-radius: 16px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    width: 75%;
+   
+}
+
+
+css RavelPostsBodyStyle(){
+    display: grid;
+    grid-template-columns: auto auto auto;
+    padding: 10px;
+    justify-content: space-around;
+    grid-gap: 12px;
+
+}
+
 
 css RavelTitleStyle(){
     font-size: 1rem;
@@ -69,43 +101,32 @@ css RavelTitleStyle(){
 
 }
 
-css HeaderSpacerStyle(){
-    flex: 1;
+css RavelImgStyle(){
+    border-radius: 16px;
+    max-width: 100%;
+    
 }
 
-
-css SpinnerStyle(){
-    width: 48px;
-    height: 48px;
-    border: 5px solid #FFF;
-    border-bottom-color: transparent;
-    border-radius: 50%;
-    display: inline-block;
-    box-sizing: border-box;
-    animation: rotation 1s linear infinite;
-}
 
 templ RavelPost(pattern services.RavelryPattern){
-    <div class = {"patternBox", RavelBoxStyle()}>
-        <img class={fmt.Sprintf("%sPatternImage", pattern.Permalink)} 
+    <div class = {"patternBox"}>
+        <img class={fmt.Sprintf("%sPatternImage", pattern.Permalink), RavelImgStyle()} 
         fetchpriority="high" loading="auto" src={pattern.FirstPhoto.MediumURL}>
-        <br>
-         <div>  
-            <a class={"patternBoxTitle", RavelTitleStyle()} href={fmt.Sprintf("https://www.ravelry.com/patterns/library/%s", pattern.Permalink)}>{pattern.Name}</a> 
-        </div>
+        <a class={"patternBoxTitle", RavelTitleStyle()} href={fmt.Sprintf("https://www.ravelry.com/patterns/library/%s", pattern.Permalink)}>{pattern.Name}</a> 
+    
     </div>
 
-        
 }
 
 
 templ RavelPosts(patterns []services.RavelryPattern){
-    <div id="mainBody" class={"paternBoxes", BodyStyle()} hx-swap-oob="true">
-        for _, pattern := range patterns{
-            <div>
-            @RavelPost(pattern)
-            </div>
-        }
+    <div id="mainBody" hx-swap-oob="true">
+        <div class={"paternBoxes", RavelPostsBodyStyle()} >
+            for _, pattern := range patterns{
+                @RavelPost(pattern)
+                
+            }
+        </div>
     </div>
 
 }
@@ -138,39 +159,64 @@ templ LogList(endpoints []string){
 
 }
 
-templ Login(){
+templ LoginPage(){
     <div>
-        <form class={"loginForm"} id="loginForm" hx-post="/login" hx-target="#loginForm" hx-swap="outerHTML"  hx-trigger="submit">
+        <form class={"loginForm"} id="loginForm" method="POST" action="/login">
             <input class="email-form" name="email" id="email" type="email" placeholder="Email:">
             <input class="password-form" name="password" id="password" type="password" placeholder="Password:">
             <button type="submit">Login</button>
             
         </form>
+        <button> <a href="/signup">Create Account</a></button>
+
     </div>
 }
 
-templ Logout(){
+templ SignupPage(){
+    <head><script src="/assets/js/htmx.min.js"></script></head>
     <div>
-     <button class={"logoutBtn"} id="logoutBtn" hx-target="#logoutBtn" hx-swap="outerHTML" hx-post="/logout" hx-trigger="click">Logout</button>
+        <form class={"signup-form"} id="signupForm" hx-post="/signup">
+            <input class="signup-form" name="email" id="email" type="email" placeholder="Email:">
+            <input class="password-form" name="password" id="password" type="password" placeholder="Password:">
+            <button type="submit">Create account</button>
+            
+        </form>
     </div>
 }
 
-templ HomePage(){
+
+templ LoginBtn(){
+    <div>
+        <a class={"loginBtn", FontStyle()} href="/login"> Login/SignUp</a>
+    </div>
+}
+
+templ LogoutBtn(){
+    <div>
+        <a class={"loginBtn", FontStyle()} hx-post="/logout" href="/"> Logout</a>
+    </div>
+}
+
+templ HomePage(login bool){
+    
     <head><script src="/assets/js/htmx.min.js"></script></head>
     <header>
         <div class={"headerBar",  HeaderBarStyle()}>
-            <div class={"header-title", HeaderTitleStyle()}><h1>RavelPin</h1></div>
-            <div class="search-container">
-            <form class="searchBar" hx-post="/link" hx-target="#mainBody" hx-swap="outerHTML" hx-indicator="#spinner">
+            <div class={"header-title", TitleStyle()}><a href="/">RavelPin</a></div>
+            <form class="searchBar" hx-post="/link" hx-target="#mainBody" hx-target-error="#mainBody" hx-swap="outerHTML" hx-indicator="#spinner" hx-ext="response-targets">
                 <input class={"SearchBar", SearchBarStyle()} name="pinlink" id="pinlink" type="url" placeholder="Pintrest post:" >
             </form>
-            @Login()
+            if login{
+                @LoginBtn()
+        
+            } else {
+                @LogoutBtn()
+
+            }  
             <span id="spinner" class={"htmx-indicator", SpinnerStyle()}>
                 Loading...
             </span>
-            </div>
         </div>
-        <div class={"header-spacer", HeaderSpacerStyle()}></div>
     </header>
     <main id="mainBody">
         <p>Nothing here...</p>

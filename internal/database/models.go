@@ -27,3 +27,12 @@ type User struct {
 	Email          string
 	HashedPassword string
 }
+
+type VerifyToken struct {
+	Token     string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Email     string
+	ExpiresAt time.Time
+	Used      sql.NullBool
+}

@@ -14,6 +14,7 @@ import (
 	"github.com/shahanmmiah/ravelpin/internal/database"
 	"github.com/shahanmmiah/ravelpin/internal/ratelimit"
 	"github.com/shahanmmiah/ravelpin/internal/recoginition"
+	"github.com/shahanmmiah/ravelpin/test"
 )
 
 func main() {
@@ -36,7 +37,25 @@ func main() {
 		RateLimit: ratelimit.NewRateLimiter(),
 	}}
 
-	//test.TestMakeAdminUser(&cfg)
+	err = cfg.Db.ResetRefreshToken(context.Background())
+	if err != nil {
+		slog.ErrorContext(context.Background(), fmt.Sprintf("error resetting refresh tokens: %v", err.Error()))
+		os.Exit(1)
+	}
+
+	err = cfg.Db.ResetUsers(context.TODO())
+	if err != nil {
+		slog.ErrorContext(context.Background(), fmt.Sprintf("error resetting user database: %v", err.Error()))
+		os.Exit(1)
+	}
+
+	err = cfg.Db.ResetVerifyTokens(context.TODO())
+	if err != nil {
+		slog.ErrorContext(context.Background(), fmt.Sprintf("error resetting verify tokens database: %v", err.Error()))
+		os.Exit(1)
+	}
+
+	test.TestMakeAdminUser(&cfg)
 
 	imageClassifyModel := recoginition.NewModel()
 

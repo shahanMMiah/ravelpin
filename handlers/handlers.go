@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -23,10 +24,12 @@ import (
 	"github.com/shahanmmiah/ravelpin/services"
 )
 
-const POSTAMOUNT = 5
+const POSTAMOUNT = 6
 const REFRESHTOKENCOOKIE = "rpRefreshToken"
 const JWTTOKENCOOKIE = "rpToken"
-const DEFAULTEXPIRYDURATION = time.Duration(time.Duration(3600) * time.Second)
+
+const DEFAULTREFRESHEXPIRY = time.Duration(time.Duration(3600) * time.Second)
+const DEFAULTJWTEXPIRY = time.Duration(time.Duration(960) * time.Second)
 
 // BASE HANDLERS
 
@@ -138,7 +141,9 @@ func (cfg *ApiConfig) HandlerGetLogs() http.Handler {
 
 		if err != nil {
 			slog.ErrorContext(req.Context(), fmt.Sprintf("could not render html components, %v", err.Error()))
-			resp.WriteHeader(http.StatusBadRequest)
+			resp.WriteHeader(http.StatusInternalServerError)
+			resp.Header().Set("Content-Type", "text/plain")
+
 			resp.Write([]byte(err.Error()))
 			return
 		}
@@ -165,8 +170,8 @@ func (cfg *ApiConfig) HandlerRefresh() http.Handler {
 			errMsg := fmt.Sprintf("no Refresh token found, %v", err.Error())
 			slog.ErrorContext(req.Context(), errMsg)
 
-			resp.WriteHeader(http.StatusUnauthorized)
-			resp.Write([]byte(errMsg))
+			http.Redirect(resp, req, "./login", http.StatusSeeOther)
+
 			return
 		}
 
@@ -176,8 +181,10 @@ func (cfg *ApiConfig) HandlerRefresh() http.Handler {
 			errMsg := fmt.Sprintf("Refresh token Error, %v", err.Error())
 			slog.ErrorContext(req.Context(), errMsg)
 
-			resp.WriteHeader(http.StatusUnauthorized)
-			resp.Write([]byte(errMsg))
+			//resp.WriteHeader(http.StatusUnauthorized)
+			resp.Header().Set("Content-Type", "text/plain")
+
+			http.Redirect(resp, req, "/login", http.StatusSeeOther)
 			return
 		}
 
@@ -185,8 +192,10 @@ func (cfg *ApiConfig) HandlerRefresh() http.Handler {
 			errMsg := fmt.Sprintf("Refresh token Expired, %v", err.Error())
 			slog.ErrorContext(req.Context(), errMsg)
 
-			resp.WriteHeader(http.StatusUnauthorized)
-			resp.Write([]byte(errMsg))
+			//resp.WriteHeader(http.StatusUnauthorized)
+			resp.Header().Set("Content-Type", "text/plain")
+
+			http.Redirect(resp, req, "/login", http.StatusSeeOther)
 			return
 
 		}
@@ -196,8 +205,11 @@ func (cfg *ApiConfig) HandlerRefresh() http.Handler {
 			errMsg := fmt.Sprintf("no Auth token found, %v", err.Error())
 			slog.ErrorContext(req.Context(), errMsg)
 
-			resp.WriteHeader(http.StatusUnauthorized)
-			resp.Write([]byte(errMsg))
+			//resp.WriteHeader(http.StatusUnauthorized)
+			resp.Header().Set("Content-Type", "text/hmtl")
+
+			http.Redirect(resp, req, "/login", http.StatusSeeOther)
+
 			return
 		}
 
@@ -210,8 +222,10 @@ func (cfg *ApiConfig) HandlerRefresh() http.Handler {
 				errMsg := fmt.Sprintf("Error refreshing auth token, %v", err.Error())
 				slog.ErrorContext(req.Context(), errMsg)
 
-				resp.WriteHeader(http.StatusInternalServerError)
-				resp.Write([]byte(errMsg))
+				//resp.WriteHeader(http.StatusInternalServerError)
+				resp.Header().Set("Content-Type", "text/plain")
+
+				http.Redirect(resp, req, "/login", http.StatusSeeOther)
 				return
 
 			}
@@ -226,8 +240,16 @@ func (cfg *ApiConfig) HandlerRefresh() http.Handler {
 
 // RAVELRY HANDLERS
 
-func MiddleWareGetRavelLink(clasifyModel *recoginition.ClassifyModel) http.Handler {
+func (cfg *ApiConfig) MiddleWareGetRavelLink(clasifyModel *recoginition.ClassifyModel) http.Handler {
 	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+
+		_, err := cfg.CheckJwtToken(req)
+
+		if err != nil {
+			slog.ErrorContext(req.Context(), fmt.Sprintf("jwt error %v", err.Error()))
+			cfg.HandlerRefresh().ServeHTTP(resp, req)
+			return
+		}
 
 		requestId := uuid.New()
 
@@ -236,6 +258,8 @@ func MiddleWareGetRavelLink(clasifyModel *recoginition.ClassifyModel) http.Handl
 			slog.ErrorContext(req.Context(), fmt.Sprintf("could not log request, %v", err.Error()))
 
 			resp.WriteHeader(http.StatusInternalServerError)
+			resp.Header().Set("Content-Type", "text/plain")
+
 			resp.Write([]byte(err.Error()))
 			return
 
@@ -245,8 +269,10 @@ func MiddleWareGetRavelLink(clasifyModel *recoginition.ClassifyModel) http.Handl
 		slog.SetDefault(logger)
 		err = req.ParseForm()
 		if err != nil {
-			logger.InfoContext(req.Context(), fmt.Sprintf("could not parse form, %v", err.Error()))
+			slog.InfoContext(req.Context(), fmt.Sprintf("could not parse form, %v", err.Error()))
 			resp.WriteHeader(http.StatusBadRequest)
+			resp.Header().Set("Content-Type", "text/plain")
+
 			resp.Write([]byte(err.Error()))
 			return
 
@@ -258,9 +284,11 @@ func MiddleWareGetRavelLink(clasifyModel *recoginition.ClassifyModel) http.Handl
 		ravelPatterns, err := HandlerFindRavelFromPins(pinLink, MiddleWareModelPreload(clasifyModel, services.ImageClasify))
 
 		if err != nil {
-			logger.InfoContext(req.Context(), fmt.Sprintf("could not find ravelry links, %v", err.Error()))
+			slog.InfoContext(req.Context(), fmt.Sprintf("could not find ravelry links, %v", err.Error()))
 
 			resp.WriteHeader(http.StatusBadRequest)
+			resp.Header().Set("Content-Type", "text/plain")
+
 			resp.Write([]byte(err.Error()))
 			return
 
@@ -270,9 +298,11 @@ func MiddleWareGetRavelLink(clasifyModel *recoginition.ClassifyModel) http.Handl
 		w, err := MarhalComponent(htmlComponents)
 
 		if err != nil {
-			logger.ErrorContext(req.Context(), fmt.Sprintf("could not render html components, %v", err.Error()))
+			slog.ErrorContext(req.Context(), fmt.Sprintf("could not render html components, %v", err.Error()))
 
 			resp.WriteHeader(http.StatusBadRequest)
+			resp.Header().Set("Content-Type", "text/plain")
+
 			resp.Write([]byte(err.Error()))
 			return
 
@@ -282,7 +312,7 @@ func MiddleWareGetRavelLink(clasifyModel *recoginition.ClassifyModel) http.Handl
 		resp.Header().Set("Content-Type", "text/html")
 		resp.Write(w.Bytes())
 
-		logger.InfoContext(req.Context(), "Request Complete", slog.String("URI", req.RequestURI), slog.String("input", req.FormValue("pinlink")))
+		slog.InfoContext(req.Context(), "Request Complete", slog.String("URI", req.RequestURI), slog.String("input", req.FormValue("pinlink")))
 		logObj.CloseLogFile()
 
 	})
@@ -399,61 +429,202 @@ func GetRavelPatterns(queries []string) ([]services.RavelryPattern, error) {
 
 		patterns = append(patterns, pattern)
 
-		/*if sItem, found := items.(map[string]any); found {
-			fmt.Println(sItem)
-
-			if image, found := sItem["first_photo"].(map[string]any); found {
-				fmt.Printf("item is  is %v, %v\n", image,image["medium2_url"])
-			}
-
-		}
-		*/
 	}
 
 	return patterns, nil
-	//fmt.Printf("code: %v - data: %v\n", res.StatusCode, jsonData["patterns"])
 
 }
 
-func (cfg *ApiConfig) HandlerCreateUser() http.Handler {
+// USER CREATE HANDLERS
+
+func (cfg *ApiConfig) HandlerVerify() http.Handler {
 	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		vals := req.URL.Query()
+
+		verCode := vals.Get("vercode")
+		if verCode == "" {
+			headers := map[string]string{"Content-Type": "text/plain"}
+			ErrorMsg(&resp, req, http.StatusBadRequest, fmt.Sprintf("No verify code param found"), headers)
+			return
+		}
+
+		email := vals.Get("email")
+		if email == "" {
+			errMsg := fmt.Sprintf("no email param found")
+			headers := map[string]string{"Content-Type": "text/plain"}
+			ErrorMsg(&resp, req, http.StatusBadRequest, errMsg, headers)
+			return
+		}
+
+		passHash := vals.Get("passhash")
+		if passHash == "" {
+			errMsg := fmt.Sprintf("no pass param found")
+			headers := map[string]string{"Content-Type": "text/plain"}
+			ErrorMsg(&resp, req, http.StatusBadRequest, errMsg, headers)
+			return
+		}
+
+		verData, err := cfg.Db.GetVerifyTokenFromId(req.Context(), email)
+
+		if err != nil {
+			errMsg := fmt.Sprintf("error with getting verify token, %v", err.Error())
+			headers := map[string]string{"Content-Type": "text/plain"}
+			ErrorMsg(&resp, req, http.StatusBadRequest, errMsg, headers)
+			return
+		}
+
+		if verData.ExpiresAt.Before(time.Now()) {
+			errMsg := fmt.Sprintf("verify code has expired")
+			headers := map[string]string{"Content-Type": "text/plain"}
+			cfg.Db.DeleteVerifyTokenFromEmail(req.Context(), email)
+			ErrorMsg(&resp, req, http.StatusBadRequest, errMsg, headers)
+			return
+		}
+
+		_, err = cfg.Db.CreateUser(req.Context(), database.CreateUserParams{
+			ID:             uuid.New(),
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
+			Email:          email,
+			HashedPassword: passHash,
+		})
+
+		if err != nil {
+			errMsg := fmt.Sprintf("error with getting verify token, %v", err.Error())
+			headers := map[string]string{"Content-Type": "text/plain"}
+
+			ErrorMsg(&resp, req, http.StatusInternalServerError, errMsg, headers)
+			return
+		}
+
+		err = cfg.Db.DeleteVerifyTokenFromEmail(req.Context(), email)
+
+		if err != nil {
+			errMsg := fmt.Sprintf("error removing used verify tokens, %v", err.Error())
+			headers := map[string]string{"Content-Type": "text/plain"}
+
+			ErrorMsg(&resp, req, http.StatusInternalServerError, errMsg, headers)
+			return
+		}
+
+		resp.Header().Set("Content-Type", "text/plain")
+		resp.WriteHeader(http.StatusOK)
+
+		resp.Write([]byte("Succesfully Verified Account :)"))
+		return
+	})
+}
+
+func (cfg *ApiConfig) HandlerSignup() http.Handler {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		headers := map[string]string{"Content-Type": "text/plain"}
+
 		err := req.ParseForm()
+
 		if err != nil {
 			resp.WriteHeader(http.StatusBadRequest)
+			resp.Header().Set("Content-Type", "text/plain")
+
 			resp.Write([]byte(fmt.Sprintf("failed parsing form %v", err.Error())))
 			return
 		}
 
 		email := req.Form.Get("email")
-		password, err := auth.HashPassword(req.Form.Get("password"))
-		if err != nil {
+
+		user, err := cfg.Db.GetUserFromEmail(req.Context(), email)
+
+		if err == nil || user.Email == email {
+
 			resp.WriteHeader(http.StatusBadRequest)
-			resp.Write([]byte(fmt.Sprintf("failed parsing form %v", err.Error())))
+			resp.Header().Set("Content-Type", "text/plain")
+
+			resp.Write([]byte(fmt.Sprintf("account already registered with email")))
 			return
+
 		}
 
-		_, err = cfg.Db.GetUserFromEmail(req.Context(), email)
+		_, err = cfg.Db.GetVerifyTokenFromId(req.Context(), email)
 
 		if err == nil {
-			resp.WriteHeader(http.StatusBadRequest)
-			resp.Write([]byte(fmt.Sprintf("failed parsing form %v", err.Error())))
+
+			errMsg := "account already registered with email"
+			ErrorMsg(&resp, req, http.StatusBadRequest, errMsg, headers)
 			return
+
 		}
 
-		usr, err := cfg.Db.CreateUser(req.Context(),
-			database.CreateUserParams{
-				ID:             uuid.New(),
-				CreatedAt:      time.Now(),
-				UpdatedAt:      time.Now(),
-				Email:          email,
-				HashedPassword: password})
+		password := req.Form.Get("password")
+		if password == "" {
+			errMsg := fmt.Sprintf("Error gettting password", err.Error())
+			ErrorMsg(&resp, req, http.StatusBadRequest, errMsg, headers)
+			return
 
-		resp.WriteHeader(http.StatusCreated)
-		resp.Write([]byte(usr.Email))
-		return
+		}
+
+		token, _ := auth.MakeToken(4)
+
+		tokenData, err := cfg.Db.CreateVerifyToken(req.Context(), database.CreateVerifyTokenParams{
+			Token:     token,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+			Email:     email,
+			ExpiresAt: time.Now().Add(DEFAULTJWTEXPIRY),
+		})
+
+		if err != nil {
+			errMsg := fmt.Sprintf("error creating verify token, %s", err.Error())
+			ErrorMsg(&resp, req, http.StatusInternalServerError, errMsg, headers)
+			return
+
+		}
+		slog.Info(fmt.Sprintf("verify token is %s", tokenData.Token))
+
+		passHash, err := auth.HashPassword(password)
+		if passHash == "" {
+			errMsg := fmt.Sprintf("error making password hash")
+			ErrorMsg(&resp, req, http.StatusInternalServerError, errMsg, headers)
+			return
+
+		}
+
+		domain, _, err := net.SplitHostPort(req.Host)
+		if err != nil {
+			domain = req.Host
+		}
+
+		err = sendVerifyEmail(email, passHash, token, domain)
+
+		if err != nil {
+			resp.WriteHeader(http.StatusInternalServerError)
+			resp.Header().Set("Content-Type", "text/plain")
+			resp.Write([]byte(fmt.Sprintf("Error sending verify email %s", err.Error())))
+
+		}
+
+		sendMsg := fmt.Sprintf("Verify email has been sent to %s", email)
+		slog.Info(sendMsg)
+		resp.WriteHeader(http.StatusAccepted)
+		resp.Header().Set("Content-Type", "text/plain")
+		resp.Write([]byte(sendMsg))
 
 	})
 
+}
+
+func (cfg *ApiConfig) HandlerSignupPage() http.Handler {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		htmlComponents, err := MarhalComponent(components.SignupPage())
+		if err != nil {
+			slog.ErrorContext(req.Context(), fmt.Sprintf("could not render html components, %v", err.Error()))
+			resp.WriteHeader(http.StatusBadRequest)
+			resp.Header().Set("Content-Type", "text/plain")
+
+			resp.Write([]byte(err.Error()))
+			return
+		}
+
+		resp.Write(htmlComponents.Bytes())
+	})
 }
 
 // LOGIN HANDLERS
@@ -463,8 +634,10 @@ func (cfg *ApiConfig) HandlerLogout() http.Handler {
 
 		refreshCookie, err := req.Cookie(REFRESHTOKENCOOKIE)
 		if err != nil {
-			slog.ErrorContext(req.Context(), fmt.Sprintf("could not find cookies %v, %v", err.Error()))
+			slog.ErrorContext(req.Context(), fmt.Sprintf("could not find cookies %v", err.Error()))
 			resp.WriteHeader(http.StatusBadRequest)
+			resp.Header().Set("Content-Type", "text/plain")
+
 			resp.Write([]byte(err.Error()))
 			return
 		}
@@ -475,26 +648,35 @@ func (cfg *ApiConfig) HandlerLogout() http.Handler {
 				RevokedAt: sql.NullTime{Time: time.Now(), Valid: true}})
 
 		UnsetTokens(&resp)
-		htmlComponents := components.Login()
-		w, err := MarhalComponent(htmlComponents)
+		resp.Header().Set("HX-Redirect", "/")
+		resp.WriteHeader(http.StatusNoContent)
 
+	})
+}
+
+func (cfg *ApiConfig) HandlerLoginPage() http.Handler {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		htmlComponents, err := MarhalComponent(components.LoginPage())
 		if err != nil {
 			slog.ErrorContext(req.Context(), fmt.Sprintf("could not render html components, %v", err.Error()))
 			resp.WriteHeader(http.StatusBadRequest)
+			resp.Header().Set("Content-Type", "text/plain")
+
 			resp.Write([]byte(err.Error()))
 			return
 		}
 
-		resp.WriteHeader(http.StatusOK)
-		resp.Write(w.Bytes())
-
+		resp.Write(htmlComponents.Bytes())
 	})
 }
+
 func (cfg *ApiConfig) HandlerLogin() http.Handler {
 	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
 		err := req.ParseForm()
 		if err != nil {
 			resp.WriteHeader(http.StatusBadRequest)
+			resp.Header().Set("Content-Type", "text/plain")
+
 			resp.Write([]byte(fmt.Sprintf("failed parsing form %v", err.Error())))
 			return
 		}
@@ -506,6 +688,8 @@ func (cfg *ApiConfig) HandlerLogin() http.Handler {
 
 		if err != nil {
 			resp.WriteHeader(http.StatusBadRequest)
+			resp.Header().Set("Content-Type", "text/plain")
+
 			resp.Write([]byte(fmt.Sprintf("error getting user %v", err.Error())))
 			return
 		}
@@ -514,6 +698,8 @@ func (cfg *ApiConfig) HandlerLogin() http.Handler {
 
 		if err != nil {
 			resp.WriteHeader(http.StatusBadRequest)
+			resp.Header().Set("Content-Type", "text/plain")
+
 			resp.Write([]byte(fmt.Sprintf("error verifying email %v", err.Error())))
 			return
 		}
@@ -526,30 +712,46 @@ func (cfg *ApiConfig) HandlerLogin() http.Handler {
 					RevokedAt: sql.NullTime{Time: time.Now(), Valid: true}})
 		}
 
-		refreshToken, jwtToken, err := cfg.SetTokens(usr.ID, req, &resp)
+		_, _, err = cfg.SetTokens(usr.ID, req, &resp)
 		if err != nil {
 			resp.WriteHeader(http.StatusInternalServerError)
+			resp.Header().Set("Content-Type", "text/plain")
 			resp.Write([]byte(fmt.Sprintf("error verifying email %v", err.Error())))
 			return
 		}
 
-		htmlComponents := components.Logout()
-		w, err := MarhalComponent(htmlComponents)
-
-		if err != nil {
-			slog.ErrorContext(req.Context(), fmt.Sprintf("could not render html components, %v", err.Error()))
-			resp.WriteHeader(http.StatusBadRequest)
-			resp.Write([]byte(err.Error()))
-			return
-		}
-		slog.InfoContext(req.Context(), fmt.Sprintf("setting token cookies %s, %s", refreshToken, jwtToken))
-		resp.WriteHeader(http.StatusOK)
-		resp.Write(w.Bytes())
+		http.Redirect(resp, req, "/", http.StatusSeeOther)
 
 	})
 }
 
 // UTILS
+
+func ErrorMsg(resp *http.ResponseWriter, req *http.Request, status int, errorMsg string, headers map[string]string) {
+
+	slog.InfoContext(req.Context(), errorMsg)
+	(*resp).WriteHeader(http.StatusBadRequest)
+
+	for key, vals := range headers {
+		(*resp).Header().Set(key, vals)
+	}
+
+	(*resp).Write([]byte(errorMsg))
+}
+
+func (cfg *ApiConfig) LimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := r.RemoteAddr
+
+		if !cfg.Serv.RateLimit.GetClientRateLimit(ip) {
+			w.WriteHeader(http.StatusTooManyRequests)
+			w.Write([]byte("Too Many Requests"))
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
 
 func (cfg *ApiConfig) CheckRefreshTokenExpired(token string) (bool, error) {
 
@@ -614,7 +816,7 @@ func (cfg *ApiConfig) SetTokens(userID uuid.UUID, req *http.Request, resp *http.
 
 func (cfg *ApiConfig) SetRefreshToken(userID uuid.UUID, req *http.Request, resp *http.ResponseWriter) (string, error) {
 
-	refreshToken, err := auth.MakeRefreshToken()
+	refreshToken, err := auth.MakeToken(32)
 	if err != nil {
 		return "", err
 	}
@@ -624,7 +826,7 @@ func (cfg *ApiConfig) SetRefreshToken(userID uuid.UUID, req *http.Request, resp 
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 		UserID:    userID,
-		ExpiresAt: time.Now().Add(DEFAULTEXPIRYDURATION),
+		ExpiresAt: time.Now().Add(DEFAULTREFRESHEXPIRY),
 	})
 	refreshcookie := http.Cookie{
 		Name:     REFRESHTOKENCOOKIE,
@@ -642,7 +844,7 @@ func (cfg *ApiConfig) SetRefreshToken(userID uuid.UUID, req *http.Request, resp 
 
 func (cfg *ApiConfig) SetJwtToken(userID uuid.UUID, resp *http.ResponseWriter) (string, error) {
 
-	jwtToken, err := auth.MakeJWT(userID, os.Getenv("TOKENSECRET"), DEFAULTEXPIRYDURATION)
+	jwtToken, err := auth.MakeJWT(userID, os.Getenv("TOKENSECRET"), DEFAULTJWTEXPIRY)
 	if err != nil {
 		return "", err
 	}
@@ -683,55 +885,119 @@ func (cfg *ApiConfig) CheckJwtToken(req *http.Request) (uuid.UUID, error) {
 
 }
 
-// SERVER HANDLERS
+func (cfg *ApiConfig) HandlerHomePage() http.Handler {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		login := true
 
-func (cfg *ApiConfig) limitMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
-
-		if !cfg.Serv.RateLimit.GetClientRateLimit(ip) {
-			w.WriteHeader(http.StatusTooManyRequests)
-			w.Write([]byte("Too Many Requests"))
-			return
+		if _, err := cfg.CheckJwtToken(req); err == nil {
+			login = false
+			slog.InfoContext(req.Context(), "user is logged in")
 		}
 
-		next.ServeHTTP(w, r)
+		component := components.HomePage(login)
+
+		w, err := MarhalComponent(component)
+		if err != nil {
+			resp.WriteHeader(http.StatusInternalServerError)
+			resp.Write([]byte(fmt.Sprintf("Unable to Marshal log %s", err.Error())))
+
+			return
+
+		}
+		resp.WriteHeader(http.StatusOK)
+		resp.Write(w.Bytes())
+
 	})
 }
 
+// SERVER HANDLERS
+
 func (cfg *ApiConfig) SetupServer(clasifyModel *recoginition.ClassifyModel) {
 
-	htmxHandle := MiddleWareServeFile("./assets/js/htmx.min.js")
-	HandleHandler(cfg.Serv.Mux, htmxHandle, "/assets/js/htmx.min.js", "GET")
-
-	component := components.HomePage()
-
-	cfg.Serv.Mux.Handle("/{$}", templ.Handler(component))
-
-	slog.Info("Listening on :3000")
-
-	err := HandleHandler(cfg.Serv.Mux, cfg.limitMiddleware(MiddleWareGetRavelLink(clasifyModel)), "/link", "POST")
-	if err != nil {
-		slog.ErrorContext(context.Background(), fmt.Sprintf("error handler %v", err.Error()))
+	type handlerItem struct {
+		Endpoint string
+		Method   string
+		Handler  http.Handler
 	}
 
-	logsHandler := cfg.HandlerGetLogs()
-
-	cfg.Serv.Mux.Handle("/logs", cfg.limitMiddleware(logsHandler))
-
-	err = HandleHandler(cfg.Serv.Mux, cfg.limitMiddleware(HandlerGetLog()), "/log", "POST")
-	if err != nil {
-		slog.ErrorContext(context.Background(), fmt.Sprintf("error handler %v", err.Error()))
+	var handlerItems = []handlerItem{
+		{
+			Endpoint: "/{$}",
+			Method:   "GET",
+			Handler:  cfg.HandlerHomePage(),
+		},
+		{
+			Endpoint: "/assets/js/htmx.min.js",
+			Method:   "GET",
+			Handler:  MiddleWareServeFile("./assets/js/htmx.min.js"),
+		},
+		{
+			Endpoint: "/link",
+			Method:   "POST",
+			Handler:  cfg.LimitMiddleware(cfg.MiddleWareGetRavelLink(clasifyModel)),
+		},
+		{
+			Endpoint: "/logs",
+			Method:   "GET",
+			Handler:  cfg.HandlerGetLogs(),
+		},
+		{
+			Endpoint: "/log",
+			Method:   "POST",
+			Handler:  cfg.LimitMiddleware(HandlerGetLog()),
+		},
+		{
+			Endpoint: "/login",
+			Method:   "POST",
+			Handler:  cfg.HandlerLogin(),
+		},
+		{
+			Endpoint: "/login",
+			Method:   "GET",
+			Handler:  cfg.HandlerLoginPage(),
+		},
+		{
+			Endpoint: "/logout",
+			Method:   "POST",
+			Handler:  cfg.HandlerLogout(),
+		},
+		{
+			Endpoint: "/refresh",
+			Method:   "POST",
+			Handler:  cfg.HandlerRefresh(),
+		},
+		{
+			Endpoint: "/signup",
+			Method:   "GET",
+			Handler:  cfg.HandlerSignupPage(),
+		},
+		{
+			Endpoint: "/signup",
+			Method:   "POST",
+			Handler:  cfg.HandlerSignup(),
+		},
+		{
+			Endpoint: "/verify",
+			Method:   "GET",
+			Handler:  cfg.HandlerVerify(),
+		},
 	}
 
-	err = HandleHandler(cfg.Serv.Mux, cfg.HandlerRefresh(), "/refresh", "POST")
-	err = HandleHandler(cfg.Serv.Mux, cfg.HandlerLogin(), "/login", "POST")
-	err = HandleHandler(cfg.Serv.Mux, cfg.HandlerLogout(), "/logout", "POST")
+	for _, h := range handlerItems {
+		err := HandleHandler(cfg.Serv.Mux, h.Handler, h.Endpoint, h.Method)
+		if err != nil {
+			slog.ErrorContext(
+				context.Background(),
+				fmt.Sprintf("error %s handler for %s  %s", h.Method, h.Endpoint, err.Error()))
+		}
+	}
 
 	server := http.Server{
 		Handler: cfg.Serv.Mux,
 		Addr:    ":3000",
 	}
+
+	slog.Info("Listening on :3000")
 
 	server.ListenAndServe()
 

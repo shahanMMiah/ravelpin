@@ -49,7 +49,6 @@ func ravelParamTest() {
 func TestMakeAdminUser(cfg *handlers.ApiConfig) {
 	password, _ := auth.HashPassword("admin")
 
-	cfg.Db.ResetUsers(context.Background())
 	_, err := cfg.Db.CreateUser(context.Background(),
 		database.CreateUserParams{
 			ID:             uuid.New(),
