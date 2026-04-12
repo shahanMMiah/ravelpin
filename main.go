@@ -55,7 +55,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	err = cfg.Db.ResetRavelHashes(context.TODO())
+	if err != nil {
+		slog.ErrorContext(context.Background(), fmt.Sprintf("error resetting ravel hash database: %v", err.Error()))
+		os.Exit(1)
+	}
+
 	test.TestMakeAdminUser(&cfg)
+
+	test.TestAddAndGetRavelHash(&cfg)
 
 	imageClassifyModel := recoginition.NewModel()
 

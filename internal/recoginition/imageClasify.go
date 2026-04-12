@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"image"
 	"log/slog"
-	"net/http"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -31,40 +31,49 @@ type classification struct {
 
 type Labels []string
 
-type ClassifyModel struct {
-	Model *tfgo.Model
-	Path  string
+func NewModel() *ImageClassifier {
+
+	return new(ImageClassifier)
 }
 
-func GetImage(imagelink string) (image.Image, error) {
-	response, err := http.Get(imagelink)
-	if err != nil {
-		return nil, err
-	}
-	defer response.Body.Close()
-
-	img, err := imaging.Decode(response.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	return img, nil
-
-}
-
-func NewModel() *ClassifyModel {
-
-	return new(ClassifyModel)
-}
-
-func (mdl *ClassifyModel) LoadModel(modelPath string) {
+func (mdl *ImageClassifier) LoadModel(modelPath string) {
 	os.Setenv("TF_CPP_MIN_LOG_LEVEL", "2")
 	mdl.Model = tfgo.LoadModel(modelPath, []string{"serve"}, nil)
 	mdl.Path = modelPath
 
 }
 
-func (mdl *ClassifyModel) ClassifyImage(imagelink string) []classification {
+func (model *ImageClassifier) GetClasifyLabels(Imagelink string) ([]string, error) {
+
+	clsItems := make([]string, 0)
+
+	// TEMP LABELS
+	testRavelSearchTerms := map[string]any{
+		"garment": []string{"sweater", "pancho", "cardigan", "trousers", "jean", "sock", "sweatshirt", "mitten"},
+	}
+
+	classified := model.ClassifyImage(Imagelink)
+
+	if len(classified) < 1 {
+		return nil, fmt.Errorf("couldnt classify whats in the image :(")
+	}
+	slog.Info(fmt.Sprintf("classified labels found %v\n", classified), slog.Any("labels", classified))
+
+	for _, cls := range classified {
+
+		garmList, _ := testRavelSearchTerms["garment"].([]string)
+
+		if slices.Contains(garmList, strings.ToLower(cls.Label)) {
+
+			clsItems = append(clsItems, cls.Label)
+
+		}
+	}
+
+	return clsItems, nil
+}
+
+func (mdl *ImageClassifier) ClassifyImage(imagelink string) []classification {
 
 	srcImage, err := GetImage(imagelink)
 	if err != nil {

@@ -6,17 +6,6 @@ import (
 	"github.com/shahanmmiah/ravelpin/internal/recoginition"
 )
 
-type RavelPhoto struct {
-	MediumURL string `json:"medium_url"`
-}
-
-type RavelryPattern struct {
-	Id         int        `json:"id"`
-	Name       string     `json:"name"`
-	Permalink  string     `json:"permalink"`
-	FirstPhoto RavelPhoto `json:"first_photo"`
-}
-
 func GetBestsImages(patterns []RavelryPattern, trgpath string, postAmount int) ([]RavelryPattern, error) {
 
 	store := recoginition.CreateStore()

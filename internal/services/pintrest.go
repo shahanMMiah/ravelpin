@@ -2,13 +2,9 @@ package services
 
 import (
 	"fmt"
-	"log/slog"
 	"net/http"
-	"slices"
-	"strings"
 	"time"
 
-	"github.com/shahanmmiah/ravelpin/internal/recoginition"
 	"golang.org/x/net/html"
 )
 
@@ -113,37 +109,4 @@ func CheckFoundImgLink(node *html.Node) (string, bool) {
 
 	return "", false
 
-}
-
-func ImageClasify(link string, model *recoginition.ClassifyModel) ([]string, error) {
-
-	pinLink, err := GetPinImageLink(link)
-
-	if err != nil {
-		return nil, err
-	}
-
-	clsItems := make([]string, 0)
-	testRavelSearchTerms := map[string]any{
-		"garment": []string{"sweater", "pancho", "cardigan", "trousers", "jean", "sock", "sweatshirt", "mitten"},
-	}
-	classified := model.ClassifyImage(pinLink)
-
-	if len(classified) < 1 {
-		return nil, fmt.Errorf("couldnt classify whats in the image :(")
-	}
-	slog.Info(fmt.Sprintf("classified labels found %v\n", classified), slog.Any("labels", classified))
-
-	for _, cls := range classified {
-
-		garmList, _ := testRavelSearchTerms["garment"].([]string)
-
-		if slices.Contains(garmList, strings.ToLower(cls.Label)) {
-
-			clsItems = append(clsItems, cls.Label)
-
-		}
-	}
-
-	return clsItems, nil
 }

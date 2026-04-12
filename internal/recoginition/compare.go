@@ -1,27 +1,58 @@
 package recoginition
 
 import (
+	"image"
+	"net/http"
+
+	"github.com/corona10/goimagehash"
+	"github.com/disintegration/imaging"
 	"github.com/rivo/duplo"
 )
 
-func CompareImage(srcpath, trgpath string) (duplo.Match, error) {
-
-	store := CreateStore()
-	trgHash, err := CreateHash(trgpath)
+func GetImage(imagelink string) (image.Image, error) {
+	response, err := http.Get(imagelink)
 	if err != nil {
-		return duplo.Match{}, err
-
+		return nil, err
 	}
-	AddToStore(store, "src", srcpath)
-	matches := store.Query(trgHash)
+	defer response.Body.Close()
 
-	return *matches[0], nil
+	img, err := imaging.Decode(response.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return img, nil
 
 }
 
-func CreateStore() *duplo.Store {
-	return duplo.New()
+// percept hash
+
+func HashFromInt(hashNum int64) *goimagehash.ImageHash {
+	return goimagehash.NewImageHash(uint64(hashNum), goimagehash.PHash)
 }
+
+func CreatePHash(imgPath string) (*goimagehash.ImageHash, error) {
+	img, err := GetImage(imgPath)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return goimagehash.PerceptionHash(img)
+
+}
+
+func Split16BitHash(hash uint64) [4]int16 {
+
+	return [4]int16{
+		int16(hash >> 48),
+		int16((hash >> 32) & 0xFFFF),
+		int16((hash >> 16) & 0xFFFF),
+		int16(hash & 0xFFFF),
+	}
+}
+
+// duplo functions
 
 func CreateHash(imgPath string) (duplo.Hash, error) {
 	img, err := GetImage(imgPath)
@@ -47,4 +78,23 @@ func AddToStore(store *duplo.Store, hshName any, imgpath string) error {
 
 	return nil
 
+}
+
+func CompareImage(srcpath, trgpath string) (duplo.Match, error) {
+
+	store := CreateStore()
+	trgHash, err := CreateHash(trgpath)
+	if err != nil {
+		return duplo.Match{}, err
+
+	}
+	AddToStore(store, "src", srcpath)
+	matches := store.Query(trgHash)
+
+	return *matches[0], nil
+
+}
+
+func CreateStore() *duplo.Store {
+	return duplo.New()
 }

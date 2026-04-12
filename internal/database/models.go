@@ -11,6 +11,20 @@ import (
 	"github.com/google/uuid"
 )
 
+type RavelHash struct {
+	ID        int32
+	ImagePath string
+	RavelPost string
+	FullHash  int64
+	HashPart1 int16
+	HashPart2 int16
+	HashPart3 int16
+	HashPart4 int16
+	RavelID   int32
+	Permalink string
+	PostName  string
+}
+
 type RefreshToken struct {
 	Token     string
 	CreatedAt time.Time

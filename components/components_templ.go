@@ -11,7 +11,7 @@ import templruntime "github.com/a-h/templ/runtime"
 import "fmt"
 
 import (
-	"github.com/shahanmmiah/ravelpin/services"
+	"github.com/shahanmmiah/ravelpin/internal/services"
 )
 
 // top bar styles
@@ -544,7 +544,7 @@ func SignupPage() templ.Component {
 			templ_7745c5c3_Var23 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<head><script src=\"/assets/js/htmx.min.js\"></script></head><div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -566,7 +566,7 @@ func SignupPage() templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\" id=\"signupForm\" method=\"POST\" action=\"/signup\"><input class=\"signup-form\" name=\"email\" id=\"email\" type=\"email\" placeholder=\"Email:\"> <input class=\"password-form\" name=\"password\" id=\"password\" type=\"password\" placeholder=\"Password:\"> <button type=\"submit\">Create account</button></form></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\" id=\"signupForm\" hx-post=\"/signup\"><input class=\"signup-form\" name=\"email\" id=\"email\" type=\"email\" placeholder=\"Email:\"> <input class=\"password-form\" name=\"password\" id=\"password\" type=\"password\" placeholder=\"Password:\"> <button type=\"submit\">Create account</button></form></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
