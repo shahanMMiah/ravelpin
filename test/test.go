@@ -16,14 +16,31 @@ import (
 	"github.com/shahanmmiah/ravelpin/internal/services"
 )
 
-func TestAddRavelhash(cfg *handlers.ApiConfig, posts []services.RavelryPattern) {
+func TestAddRavelhash(cfg *handlers.ApiConfig, posts any) {
 
-	for _, pst := range posts {
-		err := cfg.AddRavelPostHash(pst)
-		if err != nil {
-			fmt.Printf("error adding post hash %s", err.Error())
+	ravelPosts, isPosts := posts.([]services.RavelryPattern)
+
+	if isPosts {
+		for _, pst := range ravelPosts {
+			fmt.Printf("Adding %v\n", pst.Permalink)
+			err := cfg.AddRavelPostHash(pst)
+			if err != nil {
+				fmt.Printf("error adding post hash %s", err.Error())
+			}
+
 		}
+	} else {
 
+		ravelPostsFull, isPosts := posts.([]services.RavelryPatternFull)
+		if isPosts {
+			for _, pst := range ravelPostsFull {
+				err := cfg.AddRavelPostHash(pst)
+				if err != nil {
+					fmt.Printf("error adding post hash %s", err.Error())
+				}
+
+			}
+		}
 	}
 
 }
@@ -44,6 +61,34 @@ func TestAddAndGetRavelHash(cfg *handlers.ApiConfig) {
 
 	fmt.Printf("hashs posts found %v", hashs)
 
+}
+
+func TestGetRavelIds() {
+	ids, err := handlers.GetRavelIds()
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(len(ids))
+}
+
+func TestGetRavelIdPattern(cfg *handlers.ApiConfig) {
+
+	posts, err := handlers.GetRavelryPatternID([]int{3, 4, 56, 700})
+	if err != nil {
+		fmt.Println(err)
+	}
+	fmt.Println(len(posts))
+
+	TestAddRavelhash(cfg, posts)
+
+	hashs, err := cfg.GetRavelHashes(posts[0].FirstPhoto.MediumURL, 10)
+	if err != nil {
+		fmt.Printf("error getting hashs %s", err.Error())
+	}
+
+	fmt.Printf("hashs posts found %v", hashs)
 }
 
 func ravelParamTest() {

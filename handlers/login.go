@@ -230,7 +230,7 @@ func (cfg *ApiConfig) HandlerSignup() http.Handler {
 
 		password := req.Form.Get("password")
 		if password == "" {
-			errMsg := fmt.Sprintf("Error gettting password", err.Error())
+			errMsg := fmt.Sprintf("Error gettting password: %v", err.Error())
 			ErrorMsg(&resp, req, http.StatusBadRequest, errMsg, headers)
 			return
 

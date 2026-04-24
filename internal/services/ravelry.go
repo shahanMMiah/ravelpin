@@ -15,7 +15,9 @@ func GetBestsImages(patterns []RavelryPattern, trgpath string, postAmount int) (
 		return []RavelryPattern{}, err
 
 	}
+
 	for _, pattern := range patterns {
+
 		recoginition.AddToStore(store, pattern, pattern.FirstPhoto.MediumURL)
 
 	}

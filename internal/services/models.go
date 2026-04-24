@@ -10,3 +10,10 @@ type RavelryPattern struct {
 	Permalink  string     `json:"permalink"`
 	FirstPhoto RavelPhoto `json:"first_photo"`
 }
+
+type RavelryPatternFull struct {
+	Id        int          `json:"id"`
+	Name      string       `json:"name"`
+	Permalink string       `json:"permalink"`
+	Photos    []RavelPhoto `json:"photos"`
+}

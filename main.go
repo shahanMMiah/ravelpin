@@ -61,9 +61,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	// TESTS
+
 	test.TestMakeAdminUser(&cfg)
 
-	test.TestAddAndGetRavelHash(&cfg)
+	//test.TestAddAndGetRavelHash(&cfg)
+
+	test.TestGetRavelIdPattern(&cfg)
+
+	//test.TestGetRavelIds()
 
 	imageClassifyModel := recoginition.NewModel()
 

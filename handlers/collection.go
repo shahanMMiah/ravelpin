@@ -24,14 +24,51 @@ func (cfg *ApiConfig) AddRavelhash(posts []services.RavelryPattern) {
 	}
 }
 
-func (cfg *ApiConfig) AddRavelPostHash(pattern services.RavelryPattern) error {
-
-	imgHash, err := recoginition.CreatePHash(pattern.FirstPhoto.MediumURL)
-	if err != nil {
-		return err
+func (cfg *ApiConfig) AddRavelPostHash(pattern any) error {
+	searchType, isTrue := pattern.(services.RavelryPattern)
+	if isTrue {
+		imgHash, err := recoginition.CreatePHash(searchType.FirstPhoto.MediumURL)
+		if err != nil {
+			return err
+		}
+		err = cfg.AddRavelPostDB(
+			imgHash.GetHash(),
+			int32(searchType.Id),
+			searchType.Permalink,
+			searchType.Name,
+			searchType.FirstPhoto.MediumURL)
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 
-	subHashes := recoginition.Split16BitHash(imgHash.GetHash())
+	fullType, isTrue := pattern.(services.RavelryPatternFull)
+	if isTrue {
+		for _, img := range fullType.Photos {
+			imgHash, err := recoginition.CreatePHash(img.MediumURL)
+			if err != nil {
+				return err
+			}
+			err = cfg.AddRavelPostDB(
+				imgHash.GetHash(),
+				int32(fullType.Id),
+				fullType.Permalink,
+				fullType.Name,
+				img.MediumURL)
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	return fmt.Errorf("%v not not a RavelryPattern type", pattern)
+
+}
+
+func (cfg *ApiConfig) AddRavelPostDB(fullHash uint64, ravelId int32, permalink, postname, imagepath string) error {
+
+	subHashes := recoginition.Split16BitHash(fullHash)
 
 	postDb, err := cfg.Db.GetRavelHashes(context.Background(), database.GetRavelHashesParams{
 
@@ -46,16 +83,16 @@ func (cfg *ApiConfig) AddRavelPostHash(pattern services.RavelryPattern) error {
 	}
 
 	_, err = cfg.Db.CreateRavelHash(context.Background(), database.CreateRavelHashParams{
-		ImagePath: pattern.FirstPhoto.MediumURL,
-		RavelPost: fmt.Sprintf("%v%s", os.Getenv("RAVELURL"), pattern.Permalink),
-		FullHash:  int64(imgHash.GetHash()),
+		ImagePath: imagepath,
+		RavelPost: fmt.Sprintf("%v%s", os.Getenv("RAVELURL"), permalink),
+		FullHash:  int64(fullHash),
 		HashPart1: subHashes[0],
 		HashPart2: subHashes[1],
 		HashPart3: subHashes[2],
 		HashPart4: subHashes[3],
-		RavelID:   int32(pattern.Id),
-		Permalink: pattern.Permalink,
-		PostName:  pattern.Name,
+		RavelID:   ravelId,
+		Permalink: permalink,
+		PostName:  postname,
 	})
 
 	if err != nil {
@@ -63,7 +100,6 @@ func (cfg *ApiConfig) AddRavelPostHash(pattern services.RavelryPattern) error {
 	}
 
 	return nil
-
 }
 
 func (cfg *ApiConfig) GetRavelHashes(imagePath string, amount int) ([]services.RavelryPattern, error) {
@@ -73,7 +109,6 @@ func (cfg *ApiConfig) GetRavelHashes(imagePath string, amount int) ([]services.R
 		return nil, err
 	}
 
-	slog.Info(fmt.Sprintf("imageHash %v \n", imgHash))
 	subHashes := recoginition.Split16BitHash(imgHash.GetHash())
 
 	postDb, err := cfg.Db.GetRavelHashes(context.Background(), database.GetRavelHashesParams{
@@ -83,8 +118,6 @@ func (cfg *ApiConfig) GetRavelHashes(imagePath string, amount int) ([]services.R
 		HashPart3: subHashes[2],
 		HashPart4: subHashes[3],
 	})
-
-	slog.Info(fmt.Sprintf("PostDb %v \n", postDb))
 
 	if err != nil {
 		return nil, fmt.Errorf("Error getting ravelpost hashes %s", err.Error())
