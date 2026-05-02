@@ -1,8 +1,11 @@
 package recoginition
 
 import (
+	"fmt"
 	"image"
 	"net/http"
+
+	"golang.org/x/image/webp"
 
 	"github.com/corona10/goimagehash"
 	"github.com/disintegration/imaging"
@@ -14,10 +17,31 @@ func GetImage(imagelink string) (image.Image, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	defer response.Body.Close()
 
 	img, err := imaging.Decode(response.Body)
+
 	if err != nil {
+
+		_, contentType, err := image.DecodeConfig(response.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		if contentType == "image/webp" {
+
+			img, err := webp.Decode(response.Body)
+
+			if err != nil {
+				fmt.Printf("image format webp decode error %v", err)
+				return nil, err
+			}
+
+			return img, nil
+		}
+
+		fmt.Printf("image format %v decode error %v", contentType, err)
 		return nil, err
 	}
 

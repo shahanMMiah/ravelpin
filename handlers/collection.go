@@ -13,23 +13,27 @@ import (
 
 const THREASHOLD = 5
 
-func (cfg *ApiConfig) AddRavelhash(posts []services.RavelryPattern) {
+func (cfg *ApiConfig) AddRavelhash(ch chan []services.RavelryPatternFull) error {
 
+	posts := <-ch
+	slog.Info(fmt.Sprintf("adding %v to database", posts))
 	for _, pst := range posts {
-		err := cfg.AddRavelPostHash(pst)
-		if err != nil {
-			fmt.Printf("error adding post hash %s", err.Error())
-		}
+
+		go cfg.AddRavelPostHash(pst)
 
 	}
+
+	return nil
 }
 
-func (cfg *ApiConfig) AddRavelPostHash(pattern any) error {
+func (cfg *ApiConfig) AddRavelPostHash(pattern any) {
+
 	searchType, isTrue := pattern.(services.RavelryPattern)
 	if isTrue {
 		imgHash, err := recoginition.CreatePHash(searchType.FirstPhoto.MediumURL)
 		if err != nil {
-			return err
+			slog.Error(err.Error())
+			return
 		}
 		err = cfg.AddRavelPostDB(
 			imgHash.GetHash(),
@@ -37,10 +41,12 @@ func (cfg *ApiConfig) AddRavelPostHash(pattern any) error {
 			searchType.Permalink,
 			searchType.Name,
 			searchType.FirstPhoto.MediumURL)
+
 		if err != nil {
-			return err
+			slog.Error(err.Error())
+			return
 		}
-		return nil
+
 	}
 
 	fullType, isTrue := pattern.(services.RavelryPatternFull)
@@ -48,7 +54,8 @@ func (cfg *ApiConfig) AddRavelPostHash(pattern any) error {
 		for _, img := range fullType.Photos {
 			imgHash, err := recoginition.CreatePHash(img.MediumURL)
 			if err != nil {
-				return err
+				slog.Error(err.Error())
+				continue
 			}
 			err = cfg.AddRavelPostDB(
 				imgHash.GetHash(),
@@ -56,13 +63,18 @@ func (cfg *ApiConfig) AddRavelPostHash(pattern any) error {
 				fullType.Permalink,
 				fullType.Name,
 				img.MediumURL)
+
 			if err != nil {
-				return err
+				slog.Error(err.Error())
+				continue
 			}
 		}
-		return nil
+
+		return
 	}
-	return fmt.Errorf("%v not not a RavelryPattern type", pattern)
+
+	slog.Info(fmt.Sprintf("%v not not a RavelryPattern type", pattern))
+	return
 
 }
 
@@ -79,7 +91,7 @@ func (cfg *ApiConfig) AddRavelPostDB(fullHash uint64, ravelId int32, permalink, 
 	})
 
 	if len(postDb) > 0 {
-		return fmt.Errorf("ravel post already in database")
+		return fmt.Errorf("ravel post %s is already in database", postname)
 	}
 
 	_, err = cfg.Db.CreateRavelHash(context.Background(), database.CreateRavelHashParams{

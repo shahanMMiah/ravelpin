@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
+
 	"github.com/shahanmmiah/ravelpin/components"
 	"github.com/shahanmmiah/ravelpin/internal/logging"
 	"github.com/shahanmmiah/ravelpin/internal/recoginition"
@@ -64,13 +65,18 @@ func (cfg *ApiConfig) MiddleWareGetRavelLink(clasifyModel *recoginition.ImageCla
 		imageLink, err := services.GetPinImageLink(pinLink)
 
 		if err != nil {
-			slog.InfoContext(req.Context(), fmt.Sprintf("could not find image links, %v", err.Error()))
+			check, err := CheckIfImage(pinLink)
+			if !check || err != nil {
 
-			resp.WriteHeader(http.StatusBadRequest)
-			resp.Header().Set("Content-Type", "text/plain")
+				slog.InfoContext(req.Context(), fmt.Sprintf("could not find image links, %v", err.Error()))
 
-			resp.Write([]byte(err.Error()))
-			return
+				resp.WriteHeader(http.StatusBadRequest)
+				resp.Header().Set("Content-Type", "text/plain")
+
+				resp.Write([]byte(err.Error()))
+				return
+			}
+			imageLink = pinLink
 
 		}
 
@@ -138,7 +144,7 @@ func ImageClasifySearch(link string, imageClasifier *recoginition.ImageClassifie
 
 	searchQueries, err := imageClasifier.GetClasifyLabels(link)
 
-	ravPatterns, err := GetRavelPatterns(searchQueries, 10, 1)
+	ravPatterns, err := SearchRavelPatterns(searchQueries, 10, 1)
 
 	if err != nil {
 		return []services.RavelryPattern{}, err
@@ -160,57 +166,24 @@ func ImageClasifySearch(link string, imageClasifier *recoginition.ImageClassifie
 
 // ravelry posts related
 
-func GetRavelIds() ([]int, error) {
-	godotenv.Load()
-	url := os.Getenv("RAVELPATTERNFEED")
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+func (cfg *ApiConfig) GatherRavelPosts(inc, amount int) {
 
-	foundIds := make([]int, 0)
+	for amt := inc; amt <= amount; amt += inc {
+		fmt.Println(amt)
+		idsChan := make(chan []int, amount-inc)
+		postChan := make(chan []services.RavelryPatternFull, amount-inc)
 
-	if err != nil {
-		slog.Error(fmt.Sprintf("client: could not create request %v", err.Error()))
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		slog.Error(fmt.Sprintf("error doing request: %s", err.Error()))
-		return nil, err
-	}
+		go GetRavelIds(amt, amt-inc, idsChan)
 
-	defer resp.Body.Close()
+		go GetRavelryPatternFull(idsChan, postChan)
 
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		slog.Error(fmt.Sprintf("error Parsing Body: %s", err.Error()))
-		return nil, err
+		go cfg.AddRavelhash(postChan)
 
 	}
-	jsonData := make(map[string]interface{}, 0)
-
-	err = json.Unmarshal(data, &jsonData)
-	if err != nil {
-		slog.Error(fmt.Sprintf("error umarshalling json: %s", err.Error()))
-
-	}
-	idMap, exists := jsonData["events"]
-
-	if exists {
-
-		for _, id := range idMap.([]interface{}) {
-			ids, _ := id.(map[string]interface{})
-			record, _ := ids["record"].(map[string]interface{})
-			fmt.Printf("%v - %v\n", record["id"], record["url"])
-			foundIds = append(foundIds, int(record["id"].(float64)))
-
-		}
-	}
-
-	return foundIds, nil
 
 }
 
-func GetRavelryPatternID(id []int) ([]services.RavelryPattern, error) {
+func GetRavelIds(amount, startNum int, ch chan []int) {
 	godotenv.Load()
 	APIUS := os.Getenv("RAVELRYAPIUS")
 	APIKEY := os.Getenv("RAVELRYAPIKEY")
@@ -220,14 +193,14 @@ func GetRavelryPatternID(id []int) ([]services.RavelryPattern, error) {
 
 	if err != nil {
 		slog.Error(fmt.Sprintf("client: could not create request %v", err.Error()))
-		os.Exit(1)
+		return
 	}
 	params := req.URL.Query()
 
 	queryString := ""
-	amount := 500
-	for num := range amount {
-		if num == 0 {
+
+	for num := startNum; num < amount; num += 1 {
+		if num == startNum {
 			queryString += fmt.Sprintf("%s", strconv.Itoa(num))
 		} else {
 			queryString += fmt.Sprintf("|%s", strconv.Itoa(num))
@@ -244,39 +217,103 @@ func GetRavelryPatternID(id []int) ([]services.RavelryPattern, error) {
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		slog.Error(fmt.Sprintf("error doing request: %s", err.Error()))
-		return []services.RavelryPattern{}, err
+		return
 
 	}
 
 	defer res.Body.Close()
 	data, err := io.ReadAll(res.Body)
 	if err != nil {
-		return []services.RavelryPattern{}, err
+		slog.Error(fmt.Sprintf("error reading response body: %s", err.Error()))
+		return
 	}
 
 	jsonData := make(map[string]interface{}, 0)
 
-	fmt.Println(res.Status)
+	err = json.Unmarshal(data, &jsonData)
+	if err != nil {
+		slog.Error(fmt.Sprintf("error unmarshalling data: %s", err.Error()))
+		return
+
+	}
+
+	patterMap, _ := jsonData["patterns"].([]any)
+
+	ids := make([]int, 0)
+	for _, items := range patterMap {
+		ids = append(ids, int(items.(map[string]interface{})["id"].(float64)))
+
+	}
+
+	ch <- ids
+}
+
+func GetRavelryPatternFull(idCh chan []int, pstCh chan []services.RavelryPatternFull) {
+	godotenv.Load()
+	APIUS := os.Getenv("RAVELRYAPIUS")
+	APIKEY := os.Getenv("RAVELRYAPIKEY")
+
+	url := os.Getenv("RAVELIDSEARCH")
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s", url), nil)
+
+	ids := <-idCh
+
+	if err != nil {
+		slog.Error(fmt.Sprintf("client: could not create request %v", err.Error()))
+		return
+	}
+	params := req.URL.Query()
+
+	queryString := ""
+
+	for _, num := range ids {
+		if num == 0 {
+			queryString += fmt.Sprintf("%s", strconv.Itoa(num))
+		} else {
+			queryString += fmt.Sprintf(" %s", strconv.Itoa(num))
+		}
+
+	}
+
+	params.Add("ids", queryString)
+	req.URL.RawQuery = params.Encode()
+
+	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth(APIUS, APIKEY)
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Error(fmt.Sprintf("error doing request: %s", err.Error()))
+		return
+	}
+
+	defer res.Body.Close()
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		slog.Error(fmt.Sprintf("error parsing resp data: %s", err.Error()))
+		return
+	}
+
+	jsonData := make(map[string]interface{}, 0)
+
+	//fmt.Println(res.Status)
 
 	err = json.Unmarshal(data, &jsonData)
 	if err != nil {
 		slog.Error(fmt.Sprintf("error unmarshalling data: %s", err.Error()))
-		return []services.RavelryPattern{}, err
-
+		return
 	}
 
-	patterns := make([]services.RavelryPattern, 0)
+	patterns := make([]services.RavelryPatternFull, 0)
 
-	patterMap, _ := jsonData["patterns"].([]any)
-
+	patterMap, _ := jsonData["patterns"].(map[string]any)
 	for _, items := range patterMap {
 
-		pattern := services.RavelryPattern{}
+		pattern := services.RavelryPatternFull{}
 
 		patternData, err := json.Marshal(items)
 		if err != nil {
-			return []services.RavelryPattern{}, err
-
+			return
 		}
 
 		json.Unmarshal(patternData, &pattern)
@@ -285,10 +322,10 @@ func GetRavelryPatternID(id []int) ([]services.RavelryPattern, error) {
 
 	}
 
-	return patterns, nil
+	pstCh <- patterns
 }
 
-func GetRavelPatterns(queries []string, pageSize, page int) ([]services.RavelryPattern, error) {
+func SearchRavelPatterns(queries []string, pageSize, page int) ([]services.RavelryPattern, error) {
 	godotenv.Load()
 	APIUS := os.Getenv("RAVELRYAPIUS")
 	APIKEY := os.Getenv("RAVELRYAPIKEY")

@@ -67,10 +67,11 @@ func main() {
 
 	//test.TestAddAndGetRavelHash(&cfg)
 
-	test.TestGetRavelIdPattern(&cfg)
+	//test.TestGetRavelIdPattern(&cfg)
 
 	//test.TestGetRavelIds()
 
+	cfg.GatherRavelPosts(10, 50)
 	imageClassifyModel := recoginition.NewModel()
 
 	imageClassifyModel.LoadModel(fmt.Sprintf("./model/%s", os.Getenv("CLASSIFYMODELNAME")))

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/a-h/templ"
@@ -225,6 +226,26 @@ func MiddleWareServeFile(file string) http.Handler {
 
 		http.ServeFile(resp, req, file)
 	})
+}
+
+func CheckIfImage(file string) (bool, error) {
+	resp, err := http.Head(file)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("status is: %v", resp.Status)
+	}
+
+	contentType := resp.Header.Get("content-type")
+	if !strings.Contains(contentType, "image") {
+		return false, fmt.Errorf("content type not image: %v", contentType)
+
+	}
+
+	return true, nil
 }
 
 func MiddleWareModelPreload(model *recoginition.ImageClassifier, mdl func(string, *recoginition.ImageClassifier) ([]string, error)) func(string) ([]string, error) {
