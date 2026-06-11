@@ -17,6 +17,7 @@ import (
 )
 
 const imgWH = 224
+const CLASSIFYTHREASHOLD = 2
 
 type byProbs []classification
 
@@ -36,21 +37,22 @@ func NewModel() *ImageClassifier {
 	return new(ImageClassifier)
 }
 
-func (mdl *ImageClassifier) LoadModel(modelPath string) {
+func (mdl *ImageClassifier) LoadModel(modelPath, inputSig string) {
 	os.Setenv("TF_CPP_MIN_LOG_LEVEL", "2")
 	mdl.Model = tfgo.LoadModel(modelPath, []string{"serve"}, nil)
 	mdl.Path = modelPath
-
+	mdl.inputSigniture = inputSig
 }
 
-func (model *ImageClassifier) GetClasifyLabels(Imagelink string) ([]string, error) {
+func (model *ImageClassifier) GetClasifyLabels(Imagelink string, filterSclice []string) ([]string, error) {
 
 	clsItems := make([]string, 0)
 
 	// TEMP LABELS
-	testRavelSearchTerms := map[string]any{
+	/*testRavelSearchTerms := map[string]any{
 		"garment": []string{"sweater", "pancho", "cardigan", "trousers", "jean", "sock", "sweatshirt", "mitten"},
 	}
+	*/
 
 	classified := model.ClassifyImage(Imagelink)
 
@@ -61,13 +63,17 @@ func (model *ImageClassifier) GetClasifyLabels(Imagelink string) ([]string, erro
 
 	for _, cls := range classified {
 
-		garmList, _ := testRavelSearchTerms["garment"].([]string)
+		if filterSclice == nil {
+			clsItems = append(clsItems, cls.Label)
+			continue
+		}
 
-		if slices.Contains(garmList, strings.ToLower(cls.Label)) {
+		if slices.Contains(filterSclice, strings.ToLower(cls.Label)) {
 
 			clsItems = append(clsItems, cls.Label)
 
 		}
+
 	}
 
 	return clsItems, nil
@@ -88,7 +94,7 @@ func (mdl *ImageClassifier) ClassifyImage(imagelink string) []classification {
 			mdl.Model.Op("StatefulPartitionedCall", 0),
 		},
 		map[tensorflow.Output]*tensorflow.Tensor{
-			mdl.Model.Op("serving_default_inputs", 0): imgTensor,
+			mdl.Model.Op(mdl.inputSigniture, 0): imgTensor,
 		},
 	)
 
@@ -96,9 +102,10 @@ func (mdl *ImageClassifier) ClassifyImage(imagelink string) []classification {
 
 	probabilities := results[0].Value().([][]float32)[0]
 
+	slog.Info(fmt.Sprintf("probalities for %s model: %v", mdl.Path, probabilities))
 	classifications := []classification{}
 	for i, p := range probabilities {
-		if p < 5 {
+		if p < CLASSIFYTHREASHOLD {
 			continue
 		}
 		classifications = append(classifications, classification{

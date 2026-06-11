@@ -3,48 +3,16 @@ package test
 import (
 	"context"
 	"fmt"
-	"io"
-	"log"
-	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/shahanmmiah/ravelpin/handlers"
 	"github.com/shahanmmiah/ravelpin/internal/auth"
 	"github.com/shahanmmiah/ravelpin/internal/database"
+	"github.com/shahanmmiah/ravelpin/internal/services"
 )
-
-func ravelParamTest() {
-
-	APIUS := os.Getenv("RAVELRYAPIUS")
-	APIKEY := os.Getenv("RAVELRYAPIKEY")
-
-	url := "https://api.ravelry.com/pattern_attributes/groups.json"
-
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s", url), nil)
-	if err != nil {
-		log.Print("client: could not create request", err)
-		os.Exit(1)
-	}
-	req.SetBasicAuth(APIUS, APIKEY)
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		log.Print("client: could not create request", err)
-		os.Exit(1)
-	}
-	defer res.Body.Close()
-	data, err := io.ReadAll(res.Body)
-
-	if err != nil {
-		log.Print("client: could not create request", err)
-		os.Exit(1)
-	}
-
-	log.Println(string(data))
-
-}
 
 func TestMakeAdminUser(cfg *handlers.ApiConfig) {
 	password, _ := auth.HashPassword("admin")
@@ -61,4 +29,84 @@ func TestMakeAdminUser(cfg *handlers.ApiConfig) {
 		panic(fmt.Sprintf("error creating user %v", err))
 	}
 
+}
+
+func TestGetSearchPosts(cfg *handlers.ApiConfig, weights []services.YarnWeight, pageNum, pageSize int, wgtMap map[string]string, cmbMap map[string][]string) {
+
+	idsChan := make(chan []int, len(weights))
+	postChan := make(chan []services.RavelryPatternFull, len(weights))
+
+	cfg.SearchYnRavelPosts(weights, pageNum, pageSize, idsChan, postChan, wgtMap, cmbMap)
+
+}
+
+func TestGetIdPosts(cfg *handlers.ApiConfig, start, inc int) []services.RavelryPatternFull {
+	idsChan := make(chan []int)
+	postChan := make(chan []services.RavelryPatternFull)
+
+	go handlers.GetRavelIds(inc, start, idsChan)
+
+	go handlers.GetRavelryPatternFull(idsChan, postChan)
+
+	return <-postChan
+}
+
+func MakeYarnWeightDataset(cfg *handlers.ApiConfig) error {
+
+	err := os.MkdirAll("./assets/datasets/yarnweights", 0755)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	weights, err := handlers.GetRavelYarnWeights()
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	weightMap := make(map[string]string, 0)
+
+	combineMap := map[string][]string{
+		"Lace-Cobweb":     []string{"Lace", "Cobweb"},
+		"Sport-Fingering": []string{"Sport", "Fingering", "Light-Fingering", "Thread"},
+		"Aran-Worsted":    []string{"Aran", "Worsted"},
+		"Bulky-Jumbo":     []string{"Bulky", "Super-Bulky", "Jumbo"},
+	}
+	for _, name := range weights {
+		found := false
+		for _, mp := range combineMap {
+			for _, nme := range mp {
+				grp := strings.ReplaceAll(name.Name, " ", "-")
+				if grp == nme {
+					found = true
+				}
+			}
+		}
+		if !found {
+			grp := strings.ReplaceAll(name.Name, " ", "-")
+			err := os.MkdirAll(fmt.Sprintf("./assets/datasets/yarnweights/%s", grp), 0755)
+			if err != nil {
+				fmt.Println(err)
+				return err
+			}
+			weightMap[grp] = ""
+
+		}
+	}
+
+	for grp, _ := range combineMap {
+		err := os.MkdirAll(fmt.Sprintf("./assets/datasets/yarnweights/%s", grp), 0755)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		weightMap[grp] = ""
+
+	}
+
+	for num := range 1 {
+		TestGetSearchPosts(cfg, weights, num+1, num+1*100, weightMap, combineMap)
+	}
+
+	return nil
 }

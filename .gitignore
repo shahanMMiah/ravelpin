@@ -4,4 +4,5 @@ cert-ca.crt
 tfpython
 model
 assets/logs
+assets/datasets
 ./sql/backup

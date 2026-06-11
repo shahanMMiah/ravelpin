@@ -61,6 +61,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	// init classify models
+	searchClassifyModel := recoginition.NewModel()
+	searchClassifyModel.LoadModel(fmt.Sprintf("./model/%s", os.Getenv("SEARCHCLASSIFYMODELNAME")), "serving_default_inputs")
+
+	ynClassifyModel := recoginition.NewModel()
+	ynClassifyModel.LoadModel(fmt.Sprintf("./model/%s", os.Getenv("YNCLASSIFYMODELNAME")), "serving_default_sequential_input")
+
+	classifyModels := recoginition.ClassifyModels{
+		YarnWeightClassify: ynClassifyModel,
+		SearchClassify:     searchClassifyModel,
+	}
+
 	// TESTS
 
 	test.TestMakeAdminUser(&cfg)
@@ -71,11 +83,14 @@ func main() {
 
 	//test.TestGetRavelIds()
 
-	cfg.GatherRavelPosts(10, 50)
-	imageClassifyModel := recoginition.NewModel()
+	//cfg.GatherRavelPosts(10, 50)
 
-	imageClassifyModel.LoadModel(fmt.Sprintf("./model/%s", os.Getenv("CLASSIFYMODELNAME")))
+	err = test.MakeYarnWeightDataset(&cfg)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 
-	cfg.SetupServer(imageClassifyModel)
+	cfg.SetupServer(&classifyModels)
 
 }

@@ -20,16 +20,17 @@ import (
 
 // RAVELRY HANDLERS
 
-func (cfg *ApiConfig) MiddleWareGetRavelLink(clasifyModel *recoginition.ImageClassifier) http.Handler {
+func (cfg *ApiConfig) MiddleWareGetRavelLink(clasifyModel *recoginition.ClassifyModels) http.Handler {
 	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
 
-		_, err := cfg.CheckJwtToken(req)
+		/*_, err := cfg.CheckJwtToken(req)
 
 		if err != nil {
 			slog.ErrorContext(req.Context(), fmt.Sprintf("jwt error %v", err.Error()))
 			cfg.HandlerRefresh().ServeHTTP(resp, req)
 			return
 		}
+		*/
 
 		requestId := uuid.New()
 
@@ -38,7 +39,7 @@ func (cfg *ApiConfig) MiddleWareGetRavelLink(clasifyModel *recoginition.ImageCla
 			slog.ErrorContext(req.Context(), fmt.Sprintf("could not log request, %v", err.Error()))
 
 			resp.WriteHeader(http.StatusInternalServerError)
-			resp.Header().Set("Content-Type", "text/plain")
+			resp.Header().Set("Content-Type", "text/html")
 
 			resp.Write([]byte(err.Error()))
 			return
@@ -50,8 +51,8 @@ func (cfg *ApiConfig) MiddleWareGetRavelLink(clasifyModel *recoginition.ImageCla
 		err = req.ParseForm()
 		if err != nil {
 			slog.InfoContext(req.Context(), fmt.Sprintf("could not parse form, %v", err.Error()))
-			resp.WriteHeader(http.StatusBadRequest)
-			resp.Header().Set("Content-Type", "text/plain")
+			//resp.WriteHeader(http.StatusBadRequest)
+			resp.Header().Set("Content-Type", "text/html")
 
 			resp.Write([]byte(err.Error()))
 			return
@@ -69,9 +70,8 @@ func (cfg *ApiConfig) MiddleWareGetRavelLink(clasifyModel *recoginition.ImageCla
 			if !check || err != nil {
 
 				slog.InfoContext(req.Context(), fmt.Sprintf("could not find image links, %v", err.Error()))
-
-				resp.WriteHeader(http.StatusBadRequest)
-				resp.Header().Set("Content-Type", "text/plain")
+				////resp.WriteHeader(http.StatusBadRequest)
+				resp.Header().Set("Content-Type", "text/html")
 
 				resp.Write([]byte(err.Error()))
 				return
@@ -88,8 +88,8 @@ func (cfg *ApiConfig) MiddleWareGetRavelLink(clasifyModel *recoginition.ImageCla
 		if err != nil {
 			slog.InfoContext(req.Context(), fmt.Sprintf("could not find ravelry hash in database, %v", err.Error()))
 
-			resp.WriteHeader(http.StatusBadRequest)
-			resp.Header().Set("Content-Type", "text/plain")
+			//resp.WriteHeader(http.StatusBadRequest)
+			resp.Header().Set("Content-Type", "text/html")
 
 			resp.Write([]byte(err.Error()))
 			return
@@ -104,8 +104,8 @@ func (cfg *ApiConfig) MiddleWareGetRavelLink(clasifyModel *recoginition.ImageCla
 			if err != nil {
 				slog.InfoContext(req.Context(), fmt.Sprintf("could not find ravelry links, %v", err.Error()))
 
-				resp.WriteHeader(http.StatusBadRequest)
-				resp.Header().Set("Content-Type", "text/plain")
+				//resp.WriteHeader(http.StatusBadRequest)
+				resp.Header().Set("Content-Type", "text/html")
 
 				resp.Write([]byte(err.Error()))
 				return
@@ -122,8 +122,8 @@ func (cfg *ApiConfig) MiddleWareGetRavelLink(clasifyModel *recoginition.ImageCla
 		if err != nil {
 			slog.ErrorContext(req.Context(), fmt.Sprintf("could not render html components, %v", err.Error()))
 
-			resp.WriteHeader(http.StatusBadRequest)
-			resp.Header().Set("Content-Type", "text/plain")
+			//resp.WriteHeader(http.StatusBadRequest)
+			resp.Header().Set("Content-Type", "text/html")
 
 			resp.Write([]byte(err.Error()))
 			return
@@ -140,12 +140,19 @@ func (cfg *ApiConfig) MiddleWareGetRavelLink(clasifyModel *recoginition.ImageCla
 	})
 }
 
-func ImageClasifySearch(link string, imageClasifier *recoginition.ImageClassifier) ([]services.RavelryPattern, error) {
+func ImageClasifySearch(link string, imageClasifier *recoginition.ClassifyModels) ([]services.RavelryPattern, error) {
 
-	searchQueries, err := imageClasifier.GetClasifyLabels(link)
+	searchQueries, err := imageClasifier.SearchClassify.GetClasifyLabels(link, []string{"sweater", "pancho", "cardigan", "trousers", "jean", "sock", "sweatshirt", "mitten"})
+	if err != nil {
+		return []services.RavelryPattern{}, err
+	}
 
-	ravPatterns, err := SearchRavelPatterns(searchQueries, 10, 1)
+	ynQueries, err := imageClasifier.YarnWeightClassify.GetClasifyLabels(link, nil)
+	if err != nil {
+		return []services.RavelryPattern{}, err
+	}
 
+	ravPatterns, err := SearchRavelPatterns(searchQueries, ynQueries, 10, 1)
 	if err != nil {
 		return []services.RavelryPattern{}, err
 	}
@@ -166,179 +173,9 @@ func ImageClasifySearch(link string, imageClasifier *recoginition.ImageClassifie
 
 // ravelry posts related
 
-func (cfg *ApiConfig) GatherRavelPosts(inc, amount int) {
+// search query funcs
 
-	for amt := inc; amt <= amount; amt += inc {
-		fmt.Println(amt)
-		idsChan := make(chan []int, amount-inc)
-		postChan := make(chan []services.RavelryPatternFull, amount-inc)
-
-		go GetRavelIds(amt, amt-inc, idsChan)
-
-		go GetRavelryPatternFull(idsChan, postChan)
-
-		go cfg.AddRavelhash(postChan)
-
-	}
-
-}
-
-func GetRavelIds(amount, startNum int, ch chan []int) {
-	godotenv.Load()
-	APIUS := os.Getenv("RAVELRYAPIUS")
-	APIKEY := os.Getenv("RAVELRYAPIKEY")
-
-	url := os.Getenv("RAVELPATTERNSEARCH")
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s", url), nil)
-
-	if err != nil {
-		slog.Error(fmt.Sprintf("client: could not create request %v", err.Error()))
-		return
-	}
-	params := req.URL.Query()
-
-	queryString := ""
-
-	for num := startNum; num < amount; num += 1 {
-		if num == startNum {
-			queryString += fmt.Sprintf("%s", strconv.Itoa(num))
-		} else {
-			queryString += fmt.Sprintf("|%s", strconv.Itoa(num))
-		}
-
-	}
-
-	params.Add("pattern-id", queryString)
-	req.URL.RawQuery = params.Encode()
-
-	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(APIUS, APIKEY)
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		slog.Error(fmt.Sprintf("error doing request: %s", err.Error()))
-		return
-
-	}
-
-	defer res.Body.Close()
-	data, err := io.ReadAll(res.Body)
-	if err != nil {
-		slog.Error(fmt.Sprintf("error reading response body: %s", err.Error()))
-		return
-	}
-
-	jsonData := make(map[string]interface{}, 0)
-
-	err = json.Unmarshal(data, &jsonData)
-	if err != nil {
-		slog.Error(fmt.Sprintf("error unmarshalling data: %s", err.Error()))
-		return
-
-	}
-
-	patterMap, _ := jsonData["patterns"].([]any)
-
-	ids := make([]int, 0)
-	for _, items := range patterMap {
-		ids = append(ids, int(items.(map[string]interface{})["id"].(float64)))
-
-	}
-
-	ch <- ids
-}
-
-func GetRavelryPatternFull(idCh chan []int, pstCh chan []services.RavelryPatternFull) {
-	godotenv.Load()
-	APIUS := os.Getenv("RAVELRYAPIUS")
-	APIKEY := os.Getenv("RAVELRYAPIKEY")
-
-	url := os.Getenv("RAVELIDSEARCH")
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s", url), nil)
-
-	ids := <-idCh
-
-	if err != nil {
-		slog.Error(fmt.Sprintf("client: could not create request %v", err.Error()))
-		return
-	}
-	params := req.URL.Query()
-
-	queryString := ""
-
-	for _, num := range ids {
-		if num == 0 {
-			queryString += fmt.Sprintf("%s", strconv.Itoa(num))
-		} else {
-			queryString += fmt.Sprintf(" %s", strconv.Itoa(num))
-		}
-
-	}
-
-	params.Add("ids", queryString)
-	req.URL.RawQuery = params.Encode()
-
-	req.Header.Set("Content-Type", "application/json")
-	req.SetBasicAuth(APIUS, APIKEY)
-
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		slog.Error(fmt.Sprintf("error doing request: %s", err.Error()))
-		return
-	}
-
-	defer res.Body.Close()
-	data, err := io.ReadAll(res.Body)
-	if err != nil {
-		slog.Error(fmt.Sprintf("error parsing resp data: %s", err.Error()))
-		return
-	}
-
-	jsonData := make(map[string]interface{}, 0)
-
-	//fmt.Println(res.Status)
-
-	err = json.Unmarshal(data, &jsonData)
-	if err != nil {
-		slog.Error(fmt.Sprintf("error unmarshalling data: %s", err.Error()))
-		return
-	}
-
-	patterns := make([]services.RavelryPatternFull, 0)
-
-	patterMap, _ := jsonData["patterns"].(map[string]any)
-	for _, items := range patterMap {
-
-		pattern := services.RavelryPatternFull{}
-
-		patternData, err := json.Marshal(items)
-		if err != nil {
-			return
-		}
-
-		json.Unmarshal(patternData, &pattern)
-
-		patterns = append(patterns, pattern)
-
-	}
-
-	pstCh <- patterns
-}
-
-func SearchRavelPatterns(queries []string, pageSize, page int) ([]services.RavelryPattern, error) {
-	godotenv.Load()
-	APIUS := os.Getenv("RAVELRYAPIUS")
-	APIKEY := os.Getenv("RAVELRYAPIKEY")
-
-	url := os.Getenv("RAVELPATTERNSEARCH")
-
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s", url), nil)
-	if err != nil {
-		slog.Error(fmt.Sprintf("client: could not create request %v", err.Error()))
-		os.Exit(1)
-	}
-	params := req.URL.Query()
-
+func buildQueryString(queries []string) string {
 	queryString := ""
 	for num, query := range queries {
 		if num == 0 {
@@ -351,18 +188,82 @@ func SearchRavelPatterns(queries []string, pageSize, page int) ([]services.Ravel
 		}
 
 	}
-	params.Add("query", queryString)
-	params.Add("page_size", strconv.Itoa(pageSize))
-	params.Add("page", strconv.Itoa(page))
-	//params.Add("weight", "cobweb")
+	return queryString
+
+}
+
+func AddYarnWeightParam(req *http.Request, yns []string) error {
+	params := req.URL.Query()
+
+	queryString := buildQueryString([]string{yns[len(yns)-1]})
+	if queryString == "" {
+		return fmt.Errorf("could not add yn's params")
+	}
+
+	params.Add("weight", queryString)
 
 	req.URL.RawQuery = params.Encode()
+	return nil
 
-	slog.InfoContext(req.Context(), fmt.Sprintf("params to search : %v", params.Encode()))
+}
+
+func AddMainSearchParam(req *http.Request, queries []string) error {
+	params := req.URL.Query()
+
+	queryString := buildQueryString([]string{queries[len(queries)-1]})
+	if queryString == "" {
+		slog.Warn("could not add main search query params")
+		return nil
+	}
+	params.Add("query", queryString)
+	req.URL.RawQuery = params.Encode()
+
+	return nil
+}
+
+func SearchRavelPatterns(searhQueries, ynQueries []string, pageSize, page int) ([]services.RavelryPattern, error) {
+	godotenv.Load()
+	APIUS := os.Getenv("RAVELRYAPIUS")
+	APIKEY := os.Getenv("RAVELRYAPIKEY")
+
+	url := os.Getenv("RAVELPATTERNSEARCH")
+
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s", url), nil)
+	if err != nil {
+		slog.Error(fmt.Sprintf("client: could not create request %v", err.Error()))
+		return nil, err
+	}
+
+	if err != nil {
+		slog.Error(err.Error())
+		return nil, err
+	}
+
+	if len(searhQueries) > 0 {
+		err = AddMainSearchParam(req, searhQueries)
+		if err != nil {
+			slog.Error(err.Error())
+			return nil, err
+		}
+	}
+
+	if len(ynQueries) > 0 {
+		err = AddYarnWeightParam(req, ynQueries)
+		if err != nil {
+			slog.Error(err.Error())
+			return nil, err
+		}
+	}
+
+	params := req.URL.Query()
+	params.Add("page_size", strconv.Itoa(pageSize))
+	params.Add("page", strconv.Itoa(page))
+	req.URL.RawQuery = params.Encode()
+
+	slog.InfoContext(req.Context(), fmt.Sprintf("params to search : %v", req.URL.RawQuery))
 
 	req.Header.Set("Content-Type", "application/json")
 	req.SetBasicAuth(APIUS, APIKEY)
-	//req.Header.Set("Authorization", "<access_token>")
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {

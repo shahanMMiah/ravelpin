@@ -282,7 +282,7 @@ func (cfg *ApiConfig) LimitMiddleware(next http.Handler) http.Handler {
 
 // SERVER HANDLERS
 
-func (cfg *ApiConfig) SetupServer(clasifyModel *recoginition.ImageClassifier) {
+func (cfg *ApiConfig) SetupServer(clasifyModel *recoginition.ClassifyModels) {
 
 	type handlerItem struct {
 		Endpoint string
