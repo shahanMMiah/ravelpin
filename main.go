@@ -10,8 +10,10 @@ import (
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	llama "github.com/ollama/ollama/api"
 	"github.com/shahanmmiah/ravelpin/handlers"
 	"github.com/shahanmmiah/ravelpin/internal/database"
+	"github.com/shahanmmiah/ravelpin/internal/logging"
 	"github.com/shahanmmiah/ravelpin/internal/ratelimit"
 	"github.com/shahanmmiah/ravelpin/internal/recoginition"
 	"github.com/shahanmmiah/ravelpin/test"
@@ -35,6 +37,7 @@ func main() {
 	cfg := handlers.ApiConfig{Db: database.New(db), Serv: handlers.Server{
 		Mux:       http.NewServeMux(),
 		RateLimit: ratelimit.NewRateLimiter(),
+		SSE:       logging.NewSSE(),
 	}}
 
 	err = cfg.Db.ResetRefreshToken(context.Background())
@@ -68,9 +71,19 @@ func main() {
 	ynClassifyModel := recoginition.NewModel()
 	ynClassifyModel.LoadModel(fmt.Sprintf("./model/%s", os.Getenv("YNCLASSIFYMODELNAME")), "serving_default_sequential_input")
 
-	classifyModels := recoginition.ClassifyModels{
-		YarnWeightClassify: ynClassifyModel,
-		SearchClassify:     searchClassifyModel,
+	llamaClient, err := recoginition.NewLlamaClient()
+	if err != nil {
+		slog.ErrorContext(context.Background(), fmt.Sprintf("error init llama model: %v", err.Error()))
+		os.Exit(1)
+	}
+
+	classifyModels := &recoginition.ClassifyModels{
+		YarnWeightClassify:  ynClassifyModel,
+		SearchClassify:      searchClassifyModel,
+		LlammaClient:        llamaClient,
+		LlammaToolFuncs:     llama.Tools{recoginition.NewYnTool(), recoginition.NewClothingTool()},
+		LlammaStream:        false,
+		LlammaResponseTable: recoginition.NewResponseMap(),
 	}
 
 	// TESTS
@@ -85,12 +98,16 @@ func main() {
 
 	//cfg.GatherRavelPosts(10, 50)
 
-	err = test.MakeYarnWeightDataset(&cfg)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+	/*
+		err = test.MakeYarnWeightDataset(&cfg)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+	*/
 
-	cfg.SetupServer(&classifyModels)
+	//test.TestLlama(classifyModels, "https://images4-f.ravelrycache.com/flickr/2/9/9/2999083585/2999083585.jpg")
+
+	cfg.SetupServer(classifyModels)
 
 }

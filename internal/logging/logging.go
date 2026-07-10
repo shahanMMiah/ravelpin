@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 
 	"github.com/google/uuid"
 )
@@ -12,6 +13,46 @@ type LogObject struct {
 	File       *os.File
 	LogHandler *slog.TextHandler
 	Path       string
+}
+
+type SSEMap struct {
+	Lock      sync.Mutex
+	StatusMap map[string]string
+}
+
+func NewSSE() *SSEMap {
+	return &SSEMap{Lock: sync.Mutex{}, StatusMap: make(map[string]string, 0)}
+}
+
+func (m *SSEMap) Add(job, status string) {
+
+	m.Lock.Lock()
+	defer m.Lock.Unlock()
+
+	m.StatusMap[job] = status
+}
+
+func (m *SSEMap) Get(job string) (string, error) {
+
+	m.Lock.Lock()
+	defer m.Lock.Unlock()
+
+	stat, err := m.StatusMap[job]
+
+	if !err {
+		return "", fmt.Errorf("Job doesnt exists")
+	}
+
+	return stat, nil
+
+}
+func (m *SSEMap) View() map[string]string {
+
+	m.Lock.Lock()
+	defer m.Lock.Unlock()
+
+	return m.StatusMap
+
 }
 
 func MakeLoggerObject(id uuid.UUID) (*LogObject, error) {

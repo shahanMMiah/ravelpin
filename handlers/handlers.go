@@ -21,6 +21,7 @@ import (
 const POSTAMOUNT = 6
 const REFRESHTOKENCOOKIE = "rpRefreshToken"
 const JWTTOKENCOOKIE = "rpToken"
+const SSETOKENCOOKIE = "rpSSEToken"
 
 const DEFAULTREFRESHEXPIRY = time.Duration(time.Duration(3600) * time.Second)
 const DEFAULTJWTEXPIRY = time.Duration(time.Duration(960) * time.Second)
@@ -219,6 +220,42 @@ func (cfg *ApiConfig) HandlerRefresh() http.Handler {
 
 }
 
+func (cfg *ApiConfig) SSEHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		cookie, err := r.Cookie(SSETOKENCOOKIE)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte("Missing Status Job Cookie"))
+			return
+		}
+
+		stat, err := cfg.Serv.SSE.Get(cookie.Value)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			w.Write([]byte(fmt.Sprintf("Missing Job %s status:", cookie)))
+			return
+		}
+
+		StreamMsg(w, r, stat)
+		/*
+			for {
+				select {
+				case <-r.Context().Done():
+					return // Cleanly exit only when user closes the tab
+				default:
+					// Send a heartbeat ping so the proxy/browser knows you are alive
+					//w.Write([]byte(":\n\n"))
+					StreamMsg(w, r, stat)
+					time.After(1 * time.Second)
+				}
+			}
+		*/
+
+	})
+
+}
+
 // UTILS
 
 func MiddleWareServeFile(file string) http.Handler {
@@ -280,6 +317,54 @@ func (cfg *ApiConfig) LimitMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func StreamMsg(resp http.ResponseWriter, req *http.Request, msg string) error {
+	resp.Header().Set("Cache-Control", "no-cache")
+	resp.Header().Set("Content-type", "text/event-stream")
+	resp.Header().Set("Transfer-Encoding", "chunked")
+
+	flusher, valid := resp.(http.Flusher)
+	if !valid {
+		err := fmt.Errorf("Could not assert ResponseWriter to Flusher type")
+		slog.Error(err.Error())
+		resp.WriteHeader(http.StatusNotFound)
+		resp.Write([]byte(err.Error()))
+
+		return err
+	}
+
+	//msg = "could not find image in ravelry database, trying determine details from image to search for.."
+
+	//slog.InfoContext(req.Context(), msg)
+	//resp.Write([]byte(fmt.Sprintf("event: message\ndata: <div>%s</div>\\n\\n", msg)))
+	resp.Write([]byte(msg))
+
+	flusher.Flush()
+	time.Sleep(2 * time.Second)
+
+	return nil
+}
+
+func (cfg *ApiConfig) UpdatStatus(r *http.Request, msg string) error {
+	cookie, err := r.Cookie(SSETOKENCOOKIE)
+	if err != nil {
+
+		return err
+	}
+
+	cfg.Serv.SSE.Add(cookie.Value, msg)
+
+	return nil
+
+}
+
+func (cfg *ApiConfig) TestHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-type", "text/html")
+		w.Write([]byte("test response"))
+
+	})
+}
+
 // SERVER HANDLERS
 
 func (cfg *ApiConfig) SetupServer(clasifyModel *recoginition.ClassifyModels) {
@@ -301,6 +386,12 @@ func (cfg *ApiConfig) SetupServer(clasifyModel *recoginition.ClassifyModels) {
 			Method:   "GET",
 			Handler:  MiddleWareServeFile("./assets/js/htmx.min.js"),
 		},
+		{
+			Endpoint: "/assets/js/htmx.sse.js",
+			Method:   "GET",
+			Handler:  MiddleWareServeFile("./assets/js/htmx.sse.js"),
+		},
+
 		{
 			Endpoint: "/link",
 			Method:   "POST",
@@ -332,6 +423,16 @@ func (cfg *ApiConfig) SetupServer(clasifyModel *recoginition.ClassifyModels) {
 			Handler:  cfg.HandlerLogout(),
 		},
 		{
+			Endpoint: "/deleteAccount",
+			Method:   "POST",
+			Handler:  cfg.HandlerDeleteUser(),
+		},
+		{
+			Endpoint: "/deleteAccountPage",
+			Method:   "GET",
+			Handler:  cfg.HandlerDeletePage(),
+		},
+		{
 			Endpoint: "/refresh",
 			Method:   "POST",
 			Handler:  cfg.HandlerRefresh(),
@@ -350,6 +451,16 @@ func (cfg *ApiConfig) SetupServer(clasifyModel *recoginition.ClassifyModels) {
 			Endpoint: "/verify",
 			Method:   "GET",
 			Handler:  cfg.HandlerVerify(),
+		},
+		{
+			Endpoint: "/sse",
+			Method:   "GET",
+			Handler:  cfg.SSEHandler(),
+		},
+		{
+			Endpoint: "/test",
+			Method:   "GET",
+			Handler:  cfg.TestHandler(),
 		},
 	}
 

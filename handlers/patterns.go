@@ -80,8 +80,11 @@ func (cfg *ApiConfig) MiddleWareGetRavelLink(clasifyModel *recoginition.Classify
 
 		}
 
-		// get links from database or classify seach
-		slog.InfoContext(req.Context(), "tring to get hash")
+		// get links from database or classify
+
+		//MidMsg(resp, req, "trying to get hash")
+		cfg.UpdatStatus(req, " looking image in ravelry database.")
+
 		ravelPatterns, err := cfg.GetRavelHashes(imageLink, POSTAMOUNT)
 		slog.InfoContext(req.Context(), fmt.Sprintf("hash - %v", ravelPatterns))
 
@@ -98,7 +101,9 @@ func (cfg *ApiConfig) MiddleWareGetRavelLink(clasifyModel *recoginition.Classify
 
 		if len(ravelPatterns) == 0 {
 
-			slog.InfoContext(req.Context(), "could not find image in database, trying clasify search")
+			//MidMsg(resp, req, "could not find image in ravelry database, trying determine details from image to search for..")
+			cfg.UpdatStatus(req, "Could not find image in ravelry database, trying determine details from image to search for..")
+
 			ravelPatterns, err = ImageClasifySearch(imageLink, clasifyModel)
 
 			if err != nil {
@@ -115,6 +120,9 @@ func (cfg *ApiConfig) MiddleWareGetRavelLink(clasifyModel *recoginition.Classify
 		}
 
 		// render found posts
+		ynOut := clasifyModel.LlammaResponseTable.GetOutputString(os.Getenv("LLAMMAYNTOOLNAME"))
+		clthOut := clasifyModel.LlammaResponseTable.GetOutputString(os.Getenv("LLAMMACLOTHTOOLNAME"))
+		cfg.UpdatStatus(req, fmt.Sprintf("Comparing best matches for a %s %s\n", ynOut, clthOut))
 
 		htmlComponents := components.RavelPosts(ravelPatterns)
 		w, err := MarhalComponent(htmlComponents)
@@ -142,23 +150,37 @@ func (cfg *ApiConfig) MiddleWareGetRavelLink(clasifyModel *recoginition.Classify
 
 func ImageClasifySearch(link string, imageClasifier *recoginition.ClassifyModels) ([]services.RavelryPattern, error) {
 
-	searchQueries, err := imageClasifier.SearchClassify.GetClasifyLabels(link, []string{"sweater", "pancho", "cardigan", "trousers", "jean", "sock", "sweatshirt", "mitten"})
+	img, err := recoginition.GetImageBytes(link)
+
 	if err != nil {
 		return []services.RavelryPattern{}, err
 	}
 
-	ynQueries, err := imageClasifier.YarnWeightClassify.GetClasifyLabels(link, nil)
+	err = imageClasifier.ClassifyImageDetails(img)
+	//searchQueries, err := imageClasifier.SearchClassify.GetClasifyLabels(link, []string{"sweater", "pancho", "cardigan", "trousers", "jean", "sock", "sweatshirt", "mitten"})
+
+	if err != nil {
+		return []services.RavelryPattern{}, err
+	}
+	//ynQueries, err := imageClasifier.YarnWeightClassify.GetClasifyLabels(link, nil)
+	searchQueries := imageClasifier.LlammaResponseTable.GetOutputString(os.Getenv("LLAMMACLOTHTOOLNAME"))
+	ynQueries := imageClasifier.LlammaResponseTable.GetOutputString(os.Getenv("LLAMMAYNTOOLNAME"))
+
+	slog.Info(fmt.Sprintf("Clothing Predicted - %s", searchQueries))
+
+	slog.Info(fmt.Sprintf("Yarn Weight Predicted - %s", ynQueries))
+
 	if err != nil {
 		return []services.RavelryPattern{}, err
 	}
 
-	ravPatterns, err := SearchRavelPatterns(searchQueries, ynQueries, 10, 1)
+	ravPatterns, err := SearchRavelPatterns([]string{searchQueries}, []string{ynQueries}, 100, 1)
 	if err != nil {
 		return []services.RavelryPattern{}, err
 	}
 
 	if len(ravPatterns) > 0 {
-		slog.Info("comparing found ravelry posts to pintrest image...", slog.Any("postFound", ravPatterns))
+		slog.Info("comparing found ravelry posts to pintrest image...", slog.Any("post amount found", len(ravPatterns)), slog.Any("postFound", ravPatterns))
 		bestMatchPatterns, err := services.GetBestsImages(ravPatterns, link, POSTAMOUNT)
 
 		if err != nil {

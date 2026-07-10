@@ -14,3 +14,9 @@ DELETE FROM users;
 
 -- name: GetUserFromEmail :one
 SELECT * FROM users WHERE email = $1 limit 1;
+
+-- name: GetUserFromId :one
+SELECT * FROM users WHERE id = $1 limit 1;
+
+-- name: DeleteUser :exec
+DELETE FROM users WHERE email = $1;

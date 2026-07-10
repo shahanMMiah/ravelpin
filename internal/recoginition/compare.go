@@ -3,6 +3,7 @@ package recoginition
 import (
 	"fmt"
 	"image"
+	"io"
 	"net/http"
 
 	"golang.org/x/image/webp"
@@ -11,6 +12,15 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/rivo/duplo"
 )
+
+func GetImageBytes(imagelink string) ([]byte, error) {
+	response, err := http.Get(imagelink)
+
+	if err != nil {
+		return nil, err
+	}
+	return io.ReadAll(response.Body)
+}
 
 func GetImage(imagelink string) (image.Image, error) {
 	response, err := http.Get(imagelink)
@@ -42,6 +52,7 @@ func GetImage(imagelink string) (image.Image, error) {
 		}
 
 		fmt.Printf("image format %v decode error %v", contentType, err)
+
 		return nil, err
 	}
 

@@ -98,7 +98,7 @@ def main():
     layers.Dense(num_classes, name="outputs")
     ])
 
-    model.compile(optimizer=Adam(learning_rate=0.0005),
+    model.compile(optimizer=Adam(),
               loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
               metrics=['accuracy'])
 

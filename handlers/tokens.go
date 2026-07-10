@@ -104,6 +104,17 @@ func (cfg *ApiConfig) SetRefreshToken(userID uuid.UUID, req *http.Request, resp 
 
 }
 
+func SetJobCookie(resp *http.ResponseWriter, jobId string) {
+	refreshcookie := http.Cookie{
+		Name:     SSETOKENCOOKIE,
+		Value:    jobId,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	}
+	http.SetCookie(*resp, &refreshcookie)
+}
+
 func (cfg *ApiConfig) SetJwtToken(userID uuid.UUID, resp *http.ResponseWriter) (string, error) {
 
 	jwtToken, err := auth.MakeJWT(userID, os.Getenv("TOKENSECRET"), DEFAULTJWTEXPIRY)
@@ -149,6 +160,11 @@ func (cfg *ApiConfig) CheckJwtToken(req *http.Request) (uuid.UUID, error) {
 
 func (cfg *ApiConfig) HandlerHomePage() http.Handler {
 	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+		jb := "homePage"
+
+		SetJobCookie(&resp, jb)
+		cfg.UpdatStatus(req, "Status - Hompage")
+
 		login := true
 
 		if _, err := cfg.CheckJwtToken(req); err == nil {
@@ -166,6 +182,8 @@ func (cfg *ApiConfig) HandlerHomePage() http.Handler {
 			return
 
 		}
+		resp.Header().Set("Content-Type", "text/html")
+
 		resp.WriteHeader(http.StatusOK)
 		resp.Write(w.Bytes())
 

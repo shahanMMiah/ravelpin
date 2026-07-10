@@ -11,8 +11,70 @@ import (
 	"github.com/shahanmmiah/ravelpin/handlers"
 	"github.com/shahanmmiah/ravelpin/internal/auth"
 	"github.com/shahanmmiah/ravelpin/internal/database"
+	"github.com/shahanmmiah/ravelpin/internal/recoginition"
 	"github.com/shahanmmiah/ravelpin/internal/services"
 )
+
+// LLAMA TEST
+
+func TestLlama(cls *recoginition.ClassifyModels, imagePath string) error {
+	img, err := recoginition.GetImageBytes(imagePath)
+
+	err = cls.ClassifyImageDetails(img)
+	//searchQueries, err := imageClasifier.SearchClassify.GetClasifyLabels(link, []string{"sweater", "pancho", "cardigan", "trousers", "jean", "sock", "sweatshirt", "mitten"})
+
+	if err != nil {
+		fmt.Println(err)
+		return fmt.Errorf("Error: %v", err)
+	}
+
+	//ynQueries, err := imageClasifier.YarnWeightClassify.GetClasifyLabels(link, nil)
+	searchQueries := cls.LlammaResponseTable.GetOutputString(os.Getenv("LLAMMACLOTHTOOLNAME"))
+	ynQueries := cls.LlammaResponseTable.GetOutputString(os.Getenv("LLAMMAYNTOOLNAME"))
+
+	fmt.Printf("test yn found: %s\n test clothing type: %s", ynQueries, searchQueries)
+
+	/*
+		stream := false
+		client, err := llama.ClientFromEnvironment()
+		if err != nil {
+			return fmt.Errorf("Error: %v", err)
+		}
+		req := &llama.GenerateRequest{
+			Model:  os.Getenv("LLAMAMODEL"),
+			Prompt: "tell me a joke.",
+			//Images: []llama.ImageData{img},
+			Stream: &stream,
+		}
+
+		respFunc := func(resp llama.GenerateResponse) error {
+
+			fmt.Println(resp.Response)
+
+			return nil
+		}
+
+		err = client.Generate(context.Background(), req, respFunc)
+		if err != nil {
+			return fmt.Errorf("Error: %v", err)
+		}
+
+		req = &llama.GenerateRequest{
+			Model:  os.Getenv("LLAMAMODEL"),
+			Prompt: "desibe whats in the image.",
+			Images: []llama.ImageData{img},
+			Stream: &stream,
+		}
+
+		err = client.Generate(context.Background(), req, respFunc)
+
+		if err != nil {
+			return fmt.Errorf("Error: %v", err)
+		}
+	*/
+
+	return nil
+}
 
 func TestMakeAdminUser(cfg *handlers.ApiConfig) {
 	password, _ := auth.HashPassword("admin")

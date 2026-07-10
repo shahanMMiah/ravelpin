@@ -51,7 +51,7 @@ func GetherSearchYnPosts(yn string, page, pageSize int, ch chan []int) {
 	}
 
 	params := req.URL.Query()
-	//params.Add("query", "")
+	params.Add("query", "sweater")
 	params.Add("page_size", strconv.Itoa(pageSize))
 	params.Add("page", strconv.Itoa(page))
 	params.Add("weight", yn)

@@ -301,3 +301,54 @@ func (cfg *ApiConfig) HandlerSignupPage() http.Handler {
 		resp.Write(htmlComponents.Bytes())
 	})
 }
+
+func (cfg *ApiConfig) HandlerDeleteUser() http.Handler {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+
+		userId, err := cfg.CheckJwtToken(req)
+
+		if err != nil {
+			cfg.HandlerRefresh().ServeHTTP(resp, req)
+			return
+		}
+
+		usr, err := cfg.Db.GetUserFromId(req.Context(), userId)
+		if err != nil {
+			resp.WriteHeader(http.StatusInternalServerError)
+			resp.Write([]byte("Could not find user id in database"))
+			return
+		}
+
+		cfg.Db.DeleteUser(req.Context(), usr.Email)
+		if err != nil {
+			resp.WriteHeader(http.StatusInternalServerError)
+			resp.Write([]byte("issue removing user id from database"))
+			return
+		}
+
+		UnsetTokens(&resp)
+
+		resp.Header().Set("HX-Redirect", "/deleteAccountPage")
+		resp.WriteHeader(http.StatusNoContent)
+
+	})
+}
+func (cfg *ApiConfig) HandlerDeletePage() http.Handler {
+	return http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+
+		htmlComponents, err := MarhalComponent(components.DeleteAccountPage())
+
+		if err != nil {
+			slog.ErrorContext(req.Context(), fmt.Sprintf("could not render html components, %v", err.Error()))
+			resp.WriteHeader(http.StatusBadRequest)
+			resp.Header().Set("Content-Type", "text/plain")
+
+			resp.Write([]byte(err.Error()))
+			return
+		}
+
+		resp.Write(htmlComponents.Bytes())
+		return
+
+	})
+}

@@ -1,10 +1,10 @@
 package services
 
 import (
-	"sort"
-
 	"github.com/shahanmmiah/ravelpin/internal/recoginition"
 )
+
+const SCORETHRSHOLD = 500.0
 
 func GetBestsImages(patterns []RavelryPattern, trgpath string, postAmount int) ([]RavelryPattern, error) {
 
@@ -23,16 +23,27 @@ func GetBestsImages(patterns []RavelryPattern, trgpath string, postAmount int) (
 	}
 
 	matches := store.Query(trgHash)
-	sort.Sort(matches)
+	//sort.Sort(matches)
 	bestPatterns := make([]RavelryPattern, 0)
 
-	if len(matches) < postAmount {
-		postAmount = len(matches)
+	for _, m := range matches {
 
+		if m.Score < SCORETHRSHOLD && len(bestPatterns) <= postAmount {
+			bestPatterns = append(bestPatterns, m.ID.(RavelryPattern))
+
+		}
 	}
-	for num := range postAmount {
-		bestPatterns = append(bestPatterns, matches[num].ID.(RavelryPattern))
-	}
+
+	/*
+
+		if len(matches) < postAmount {
+			postAmount = len(matches)
+
+		}
+		for num := range postAmount {
+			bestPatterns = append(bestPatterns, matches[num].ID.(RavelryPattern))
+		}
+	*/
 
 	return bestPatterns, nil
 
