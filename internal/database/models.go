@@ -34,12 +34,28 @@ type RefreshToken struct {
 	RevokedAt sql.NullTime
 }
 
+type SearchResult struct {
+	ID        uuid.UUID
+	Name      string
+	Permalink string
+	ImagePath string
+	SearchID  uuid.UUID
+}
+
 type User struct {
 	ID             uuid.UUID
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	Email          string
 	HashedPassword string
+}
+
+type UserSearch struct {
+	ID        uuid.UUID
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	SearchImg string
+	UserID    uuid.UUID
 }
 
 type VerifyToken struct {

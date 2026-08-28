@@ -458,6 +458,16 @@ func (cfg *ApiConfig) SetupServer(clasifyModel *recoginition.ClassifyModels) {
 			Handler:  cfg.SSEHandler(),
 		},
 		{
+			Endpoint: "/history",
+			Method:   "GET",
+			Handler:  cfg.HandlerUserSearches(),
+		},
+		{
+			Endpoint: "/historySearch",
+			Method:   "GET",
+			Handler:  cfg.HandlerUserSearchResult(),
+		},
+		{
 			Endpoint: "/test",
 			Method:   "GET",
 			Handler:  cfg.TestHandler(),

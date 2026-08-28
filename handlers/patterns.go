@@ -8,11 +8,13 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 
 	"github.com/shahanmmiah/ravelpin/components"
+	"github.com/shahanmmiah/ravelpin/internal/database"
 	"github.com/shahanmmiah/ravelpin/internal/logging"
 	"github.com/shahanmmiah/ravelpin/internal/recoginition"
 	"github.com/shahanmmiah/ravelpin/internal/services"
@@ -123,6 +125,44 @@ func (cfg *ApiConfig) MiddleWareGetRavelLink(clasifyModel *recoginition.Classify
 		ynOut := clasifyModel.LlammaResponseTable.GetOutputString(os.Getenv("LLAMMAYNTOOLNAME"))
 		clthOut := clasifyModel.LlammaResponseTable.GetOutputString(os.Getenv("LLAMMACLOTHTOOLNAME"))
 		cfg.UpdatStatus(req, fmt.Sprintf("Comparing best matches for a %s %s\n", ynOut, clthOut))
+
+		// TODO: store found posts to user searhces
+
+		userId, err := cfg.CheckJwtToken(req)
+
+		if err == nil {
+			usr, err := cfg.Db.GetUserFromId(req.Context(), userId)
+			if err == nil {
+				usrSearch, err := cfg.Db.CreateUserSearch(req.Context(), database.CreateUserSearchParams{
+					ID:        uuid.New(),
+					CreatedAt: time.Now(),
+					UpdatedAt: time.Now(),
+					UserID:    usr.ID,
+					SearchImg: imageLink,
+				})
+				if err != nil {
+					ErrorMsg(&resp, req, http.StatusInternalServerError, fmt.Sprintf("error saving search history %s", err.Error()), nil)
+					return
+				}
+
+				for _, post := range ravelPatterns {
+					slog.InfoContext(req.Context(), fmt.Sprintf("saving %v to search history", post.Name))
+					_, err := cfg.Db.CreateSearchResult(req.Context(), database.CreateSearchResultParams{
+						ID:        uuid.New(),
+						Name:      post.Name,
+						Permalink: post.Permalink,
+						ImagePath: post.FirstPhoto.MediumURL,
+						SearchID:  usrSearch.ID,
+					})
+					if err != nil {
+						ErrorMsg(&resp, req, http.StatusInternalServerError, fmt.Sprintf("error saving history result %s", err.Error()), nil)
+						return
+					}
+				}
+
+			}
+
+		}
 
 		htmlComponents := components.RavelPosts(ravelPatterns)
 		w, err := MarhalComponent(htmlComponents)

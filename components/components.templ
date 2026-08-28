@@ -99,6 +99,52 @@ css RavelImgStyle() {
 	max-width: 100%;
 }
 
+css UserSearchImgStyle() {
+	border-radius: 16px;
+	max-width: 20%;
+	height: auto;
+}
+
+templ UserSearches(posts []services.UserSearch){
+	@HistoryTopBar()
+	<div id="mainBody" >
+		<div class={ "postBoxes", RavelPostsBodyStyle() }>
+			for _, post := range posts {
+			<div class={ "patternBox" }>
+				<img
+					class={ fmt.Sprintf("%SearchImage", post.SearchId.ID()), UserSearchImgStyle() }
+					fetchpriority="high"
+					loading="auto"
+					src={post.Photo}
+				/>
+				<a class={ "patternBoxTitle", RavelTitleStyle() } href={ fmt.Sprintf("/historySearch?id=%v", post.SearchId.String())}> {post.Photo}</a>
+			</div>
+			}
+		</div>
+	</div>
+
+}
+
+templ SearchResults(posts []services.RavelryPattern){
+	@HistoryTopBar()
+	<div id="mainBody" >
+		<div class={ "postBoxes", RavelPostsBodyStyle() }>
+			for _, pattern := range posts {
+				<div class={ "patternBox" }>
+					<img
+						class={ fmt.Sprintf("%sPatternImage", pattern.Permalink), RavelImgStyle() }
+						fetchpriority="high"
+						loading="auto"
+						src={ pattern.FirstPhoto.MediumURL }
+					/>
+					<a class={ "patternBoxTitle", RavelTitleStyle() } href={ fmt.Sprintf("https://www.ravelry.com/patterns/library/%s", pattern.Permalink) }>{ pattern.Name }</a>
+				</div>
+			}
+		</div>
+	</div>
+
+}
+
 templ RavelPost(pattern services.RavelryPattern) {
 	<div class={ "patternBox" }>
 		<img
@@ -186,6 +232,12 @@ templ DeleteAccountBtn() {
 	</div>
 }
 
+templ SearchHistoryBtn() {
+	<div>
+		<a class={ "UsrHistoryBtn", FontStyle() } href="/history"> Search History..</a>
+	</div>
+}
+
 templ DeleteAccountPage() {
 	<div class={ "header-title", TitleStyle() }><a href="/">RavelPin</a></div>
 	<div>
@@ -193,7 +245,25 @@ templ DeleteAccountPage() {
 	</div>
 }
 
-templ HomePage(login bool) {
+templ HistoryTopBar(){
+	<!DOCTYPE html>
+	<head>
+		<script src="/assets/js/htmx.min.js"></script>
+		<script src="/assets/js/htmx.sse.js"></script>
+	</head>
+	<header>
+		<div class={ "headerBar",  HeaderBarStyle() }>
+			<div class={ "header-title", TitleStyle() }><a href="/">RavelPin</a></div>
+			<div class={ "history-title", TitleStyle() }>Search History</div>
+			@SearchHistoryBtn()
+			@LogoutBtn()
+
+		</div>
+	</header>
+}
+
+
+templ SearchTopBar(login bool){
 	<!DOCTYPE html>
 	<head>
 		<script src="/assets/js/htmx.min.js"></script>
@@ -209,10 +279,15 @@ templ HomePage(login bool) {
 				@LoginBtn()
 			} else {
 				@DeleteAccountBtn()
+				@SearchHistoryBtn()
 				@LogoutBtn()
 			}
 		</div>
 	</header>
+}
+
+templ HomePage(login bool) {
+	@SearchTopBar(login)
 	<main>
 		<div id="mainBody">
 			<span id="spinner" class={ "htmx-indicator", SpinnerStyle() }>

@@ -1,5 +1,7 @@
 package services
 
+import "github.com/google/uuid"
+
 type RavelPhoto struct {
 	MediumURL string `json:"medium_url"`
 }
@@ -14,6 +16,11 @@ type RavelryPattern struct {
 	Name       string     `json:"name"`
 	Permalink  string     `json:"permalink"`
 	FirstPhoto RavelPhoto `json:"first_photo"`
+}
+
+type UserSearch struct {
+	SearchId uuid.UUID `json:"uuid"`
+	Photo    string    `json:"first_photo"`
 }
 
 type RavelryPatternFull struct {

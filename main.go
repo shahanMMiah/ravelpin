@@ -40,15 +40,10 @@ func main() {
 		SSE:       logging.NewSSE(),
 	}}
 
+	// RESET tests
 	err = cfg.Db.ResetRefreshToken(context.Background())
 	if err != nil {
 		slog.ErrorContext(context.Background(), fmt.Sprintf("error resetting refresh tokens: %v", err.Error()))
-		os.Exit(1)
-	}
-
-	err = cfg.Db.ResetUsers(context.TODO())
-	if err != nil {
-		slog.ErrorContext(context.Background(), fmt.Sprintf("error resetting user database: %v", err.Error()))
 		os.Exit(1)
 	}
 
@@ -62,6 +57,18 @@ func main() {
 	if err != nil {
 		slog.ErrorContext(context.Background(), fmt.Sprintf("error resetting ravel hash database: %v", err.Error()))
 		os.Exit(1)
+	}
+
+	userSwitch := false
+	if userSwitch {
+		err = cfg.Db.ResetUsers(context.TODO())
+		if err != nil {
+			slog.ErrorContext(context.Background(), fmt.Sprintf("error resetting user database: %v", err.Error()))
+			os.Exit(1)
+		}
+
+		test.TestMakeAdminUser(&cfg)
+
 	}
 
 	// init classify models
@@ -87,8 +94,6 @@ func main() {
 	}
 
 	// TESTS
-
-	test.TestMakeAdminUser(&cfg)
 
 	//test.TestAddAndGetRavelHash(&cfg)
 
